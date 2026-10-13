@@ -1,3 +1,9 @@
+# OS-generated files
+.DS_Store
+._*
+Thumbs.db
+Desktop.ini
+
 # Python-generated files
 __pycache__/
 *.py[oc]
@@ -8,11 +14,28 @@ wheels/
 
 # Virtual environments
 .venv
+venv/
 
 # Tool caches
 .mypy_cache/
 .ruff_cache/
 .pytest_cache/
+.cache/
+.hypothesis/
+
+# Notebook checkpoints
+.ipynb_checkpoints/
+
+# Test coverage reports
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+
+# Editor temporary files
+*.swp
+*.swo
+*~
 
 # Scratch
 _to_delete/
