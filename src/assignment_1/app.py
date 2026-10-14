@@ -5,10 +5,17 @@ from contextlib import asynccontextmanager
 from typing import Literal
 
 from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from assignment_1.config import Settings
-from assignment_1.model_client import ModelClient, build_model_client
+from assignment_1.model_client import (
+    ModelClient,
+    ModelClientError,
+    ModelTimeoutError,
+    ModelUnavailableError,
+    build_model_client,
+)
 
 settings = Settings()
 
@@ -37,6 +44,28 @@ def get_model_client(request: Request) -> ModelClient:
     """
     client: ModelClient = request.app.state.model_client
     return client
+
+
+class ErrorResponse(BaseModel):
+    """Typed body returned when the model backend fails."""
+
+    detail: str
+
+
+@app.exception_handler(ModelClientError)
+async def model_error_handler(request: Request, exc: ModelClientError) -> JSONResponse:
+    """Turn model backend failures into 504/503/502 instead of a bare 500.
+
+    The message names the failure but never echoes credentials or the prompt.
+    """
+    if isinstance(exc, ModelTimeoutError):
+        status_code = 504
+    elif isinstance(exc, ModelUnavailableError):
+        status_code = 503
+    else:
+        status_code = 502
+    body = ErrorResponse(detail=str(exc))
+    return JSONResponse(status_code=status_code, content=body.model_dump())
 
 
 class HealthResponse(BaseModel):
