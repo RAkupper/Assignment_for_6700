@@ -1,1 +1,1 @@
-"""a01-6700: installable FastAPI service skeleton for an ML inference API."""
+"""RAG question answering on U.S. immigration rules for international students."""

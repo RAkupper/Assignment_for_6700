@@ -1,4 +1,4 @@
-# a01-6700
+# Assignment_for_6700
 
 An installable FastAPI service skeleton for our course ML inference API. This week it
 exposes a typed `/health` endpoint; later assignments will put a model behind it.
@@ -37,8 +37,8 @@ uv --version
 ### 2. Clone and install
 
 ```bash
-git clone https://github.com/RAkupper/a01-6700.git a01-6700
-cd a01-6700
+git clone https://github.com/RAkupper/Assignment_for_6700.git
+cd Assignment_for_6700
 uv sync --extra dev --frozen
 ```
 
@@ -139,7 +139,7 @@ sync.
 
 | Variable | Default | Meaning and validation |
 | -------- | ------- | ---------------------- |
-| `APP_NAME` | `a01-6700` | Application title; must not be empty or whitespace-only. |
+| `APP_NAME` | `assignment-for-6700` | Application title; must not be empty or whitespace-only. |
 | `APP_ENVIRONMENT` | `development` | Must be `development` or `production`. |
 | `APP_DEBUG` | `false` | Boolean debug flag; must be `false` in production. |
 
@@ -161,8 +161,12 @@ sync.
 ### Project layout
 
 ```text
-a01-6700/
-├── .github/workflows/ci.yml   # GitHub Actions quality gates
+Assignment_for_6700/
+├── .github/
+│   ├── ISSUE_TEMPLATE/        # bug report, documentation, feature request
+│   └── workflows/ci.yml       # GitHub Actions quality gates
+├── .env.local.example         # local development settings
+├── .env.production.example    # deployed settings
 ├── .pre-commit-config.yaml    # Git hooks (ruff, hygiene checks)
 ├── .python-version            # Python 3.13, read by uv and CI
 ├── pyproject.toml             # metadata, dependencies, tool config
@@ -170,8 +174,10 @@ a01-6700/
 ├── src/assignment_1/
 │   ├── __init__.py
 │   ├── app.py                 # FastAPI app, Pydantic models, routes
+│   ├── config.py              # typed Settings read from the environment
 │   └── main.py                # CLI entry-point placeholder
 └── tests/
+    ├── test_config.py         # Settings validation tests
     └── test_health.py         # /health endpoint tests
 ```
 

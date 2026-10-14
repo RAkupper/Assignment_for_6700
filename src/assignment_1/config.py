@@ -15,7 +15,7 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         str_strip_whitespace=True,
     )
-    name: str = Field(default="a01-6700", min_length=1)
+    name: str = Field(default="assignment-for-6700", min_length=1)
     environment: Literal["development", "production"] = "development"
     debug: bool = False
 
