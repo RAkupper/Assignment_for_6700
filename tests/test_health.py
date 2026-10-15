@@ -2,7 +2,7 @@
 
 from fastapi.testclient import TestClient
 
-from assignment_1.app import HealthResponse, app
+from myapp.app import HealthResponse, app
 
 client = TestClient(app)
 
