@@ -15,3 +15,12 @@ def fake_model_client() -> Iterator[FakeModelClient]:
     app.dependency_overrides[get_model_client] = lambda: fake
     yield fake
     app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def slow_model_client() -> Iterator[FakeModelClient]:
+    """Route get_model_client to a fake that blocks for half a second per call."""
+    fake = FakeModelClient(delay_s=0.5)
+    app.dependency_overrides[get_model_client] = lambda: fake
+    yield fake
+    app.dependency_overrides.clear()

@@ -210,6 +210,7 @@ LLM_PROVIDER=openai uv run python scripts/bench_model.py   # latency check
 | Method | Path      | Response model   | Description                              |
 | ------ | --------- | ---------------- | ---------------------------------------- |
 | GET    | `/health` | `HealthResponse` | Liveness check with service version     |
+| POST   | `/generate` | `GenerateResponse` | Model completion for a prompt |
 | GET    | `/docs`   | HTML             | Auto-generated Swagger UI (FastAPI)      |
 
 `HealthResponse` fields:
@@ -218,6 +219,25 @@ LLM_PROVIDER=openai uv run python scripts/bench_model.py   # latency check
 | --------- | ------------- | --------- |
 | `status`  | `"ok"`        | `"ok"`    |
 | `version` | `str`         | `"0.1.0"` |
+
+`POST /generate` takes a `GenerateRequest` body and returns a `GenerateResponse`.
+The model call runs in a worker thread, so `/health` keeps answering while a slow
+generation is in flight.
+
+| Model | Field | Type | Validation or example |
+| --- | --- | --- | --- |
+| `GenerateRequest` | `prompt` | `str` | Leading and trailing whitespace stripped; 1 to 4,000 characters, otherwise `422` |
+| `GenerateResponse` | `completion` | `str` | `"OPT is a period of practical training..."` |
+
+```bash
+curl -X POST http://127.0.0.1:8000/generate \
+  -H "Content-Type: application/json" \
+  -d '{"prompt": "What is OPT?"}'
+```
+
+With the default `LLM_PROVIDER=echo` the completion is the prompt itself, which
+confirms the wiring without a model server. Model failures return `504`, `503` or
+`502` as described under [Configuration](#configuration).
 
 ### Project layout
 
@@ -241,8 +261,9 @@ Assignment_for_6700/
 ├── docs/model-serving.md      # model architecture decision and measurements
 ├── scripts/bench_model.py     # latency benchmark through the service's client
 └── tests/
-    ├── conftest.py, fakes.py  # FakeModelClient and its fixture
+    ├── conftest.py, fakes.py  # FakeModelClient and its fast and slow fixtures
     ├── test_config.py         # Settings validation tests
+    ├── test_generate.py       # /generate endpoint, health during a slow request
     ├── test_health.py         # /health endpoint tests
     ├── test_model_client.py   # client lifecycle and dependency override
     └── test_openai_client.py  # model settings, HTTP client, error mapping
