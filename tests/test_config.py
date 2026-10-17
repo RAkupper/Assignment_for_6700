@@ -2,8 +2,8 @@
 import pytest
 from pydantic import ValidationError
 
-from assignment_1.app import app, settings
-from assignment_1.config import Settings
+from myapp.app import app, settings
+from myapp.config import Settings
 
 
 def test_settings_read_environment(monkeypatch: pytest.MonkeyPatch) -> None:

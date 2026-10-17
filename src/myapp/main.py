@@ -1,4 +1,4 @@
-"""Command-line entry point for the assignment_1 package."""
+"""Command-line entry point for the myapp package."""
 
 
 def main() -> None:

@@ -1,9 +1,10 @@
 # Read service configuration from environment variables.
 
 # Imports
+from pathlib import Path
 from typing import Literal, Self
 
-from pydantic import Field, model_validator
+from pydantic import Field, FilePath, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -18,6 +19,7 @@ class Settings(BaseSettings):
     name: str = Field(default="assignment-for-6700", min_length=1)
     environment: Literal["development", "production"] = "development"
     debug: bool = False
+    model_path: FilePath = Path("models/digits.joblib")
 
     @model_validator(mode="after")
     def reject_debug_in_production(self) -> Self:

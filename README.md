@@ -57,7 +57,7 @@ cp .env.local.example .env
 Then start the service:
 
 ```bash
-uv run uvicorn assignment_1.app:app --reload
+uv run uvicorn myapp.app:app --reload
 ```
 
 You should see `Uvicorn running on http://127.0.0.1:8000`.
@@ -81,6 +81,23 @@ server.
 
 ## How-to guides
 
+### Train and save the digits model
+
+Run the training script separately from the API:
+
+```bash
+uv run python scripts/train_digits.py
+```
+
+The script trains an SVM classifier on scikit-learn's built-in 8×8 digits dataset,
+evaluates it on a held-out 20% test split, and saves `models/digits.joblib`.
+The split uses a fixed random seed for reproducibility. No dataset download or
+GPU is needed. The model takes 64 pixel values (0–16) and predicts a digit (0–9).
+
+The saved model is intended to be loaded once at API startup when `/predict` is
+implemented; training does not run as part of service startup or a request.
+Keep `models/digits.joblib` with the project and include it in the Docker image.
+
 ### Run the tests
 
 ```bash
@@ -90,7 +107,7 @@ uv run pytest
 With a coverage report:
 
 ```bash
-uv run pytest --cov=assignment_1
+uv run pytest --cov=myapp
 ```
 
 ### Lint, format and type-check
@@ -133,7 +150,7 @@ sync.
 
 ### Configuration
 
-`Settings` in `src/assignment_1/config.py` reads environment variables and the
+`Settings` in `src/myapp/config.py` reads environment variables and the
 `.env` file in the working directory. Environment variables take precedence over
 `.env`; missing values use the defaults below.
 
@@ -171,7 +188,7 @@ Assignment_for_6700/
 ├── .python-version            # Python 3.13, read by uv and CI
 ├── pyproject.toml             # metadata, dependencies, tool config
 ├── uv.lock                    # pinned, shared environment
-├── src/assignment_1/
+├── src/myapp/
 │   ├── __init__.py
 │   ├── app.py                 # FastAPI app, Pydantic models, routes
 │   ├── config.py              # typed Settings read from the environment
