@@ -4,33 +4,35 @@
 # Defaults come from .env.production.example (no secrets). Put overrides and any
 # hosted-API key in an untracked .env; its values win over the example file and
 # over the LLM_* defaults below. The first start downloads the model weights.
+#
+# The model server is llama.cpp rather than Ollama because the Ollama image alone
+# (3.78 GB) does not fit next to a model on the 20 GB m3.small root disk.
+# To use the class model server instead, set in .env:
+#   LLM_BASE_URL=http://10.1.82.181:8000/v1
+#   LLM_MODEL=Qwen/Qwen2.5-14B-Instruct-AWQ
 
 services:
-  ollama:
-    image: ollama/ollama:0.40.4
+  llm:
+    image: ghcr.io/ggml-org/llama.cpp:server@sha256:f41d47eee678c02656eefc9ed8cce76cab584aa7032805eeef0e6639fcfda485
+    command:
+      - -hf
+      - ${LLM_HF_REPO:-Qwen/Qwen2.5-1.5B-Instruct-GGUF:Q4_K_M}
+      - --alias
+      - ${LLM_MODEL:-qwen2.5-1.5b-instruct}
+      - -c
+      - "4096"
     environment:
-      OLLAMA_MODELS: /models
+      LLAMA_CACHE: /models
     volumes:
-      - ollama-models:/models
+      - llm-models:/models
+    # /health answers 503 while the model loads and 200 once it can serve.
     healthcheck:
-      test: ["CMD", "ollama", "list"]
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 10s
       timeout: 5s
-      retries: 12
-      start_period: 10s
+      retries: 30
+      start_period: 120s
     restart: unless-stopped
-
-  # One-shot: downloads the weights into the volume. A no-op when they are already
-  # there, so restarts and unshelves do not download them again.
-  model-pull:
-    image: ollama/ollama:0.40.4
-    environment:
-      OLLAMA_HOST: ollama:11434
-    entrypoint: ["ollama", "pull", "${LLM_MODEL:-qwen2.5:1.5b-instruct}"]
-    depends_on:
-      ollama:
-        condition: service_healthy
-    restart: "no"
 
   app:
     build: .
@@ -41,16 +43,18 @@ services:
         required: false
     environment:
       LLM_PROVIDER: ${LLM_PROVIDER:-openai}
-      LLM_BASE_URL: ${LLM_BASE_URL:-http://ollama:11434/v1}
-      LLM_MODEL: ${LLM_MODEL:-qwen2.5:1.5b-instruct}
+      LLM_BASE_URL: ${LLM_BASE_URL:-http://llm:8080/v1}
+      LLM_MODEL: ${LLM_MODEL:-qwen2.5-1.5b-instruct}
+      # 2 vCPUs generate ~25 tokens/s, so long answers under concurrent load
+      # would exceed the 120 s client timeout.
+      LLM_MAX_TOKENS: ${LLM_MAX_TOKENS:-128}
     ports:
       - "8000:8000"
     depends_on:
-      ollama:
+      llm:
         condition: service_healthy
-      model-pull:
-        condition: service_completed_successfully
     restart: unless-stopped
 
 volumes:
-  ollama-models:
+  llm-models:
+    name: llm-models
