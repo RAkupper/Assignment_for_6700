@@ -2,7 +2,8 @@
 #
 # Fresh clone on the instance:   docker compose up -d
 # Defaults come from .env.production.example (no secrets). Put overrides and any
-# hosted-API key in an untracked .env; its values win over the example file.
+# hosted-API key in an untracked .env; its values win over the example file and
+# over the LLM_* defaults below. The first start downloads the model weights.
 
 services:
   ollama:
@@ -39,8 +40,8 @@ services:
       - path: .env
         required: false
     environment:
-      LLM_PROVIDER: openai
-      LLM_BASE_URL: http://ollama:11434/v1
+      LLM_PROVIDER: ${LLM_PROVIDER:-openai}
+      LLM_BASE_URL: ${LLM_BASE_URL:-http://ollama:11434/v1}
       LLM_MODEL: ${LLM_MODEL:-qwen2.5:1.5b-instruct}
     ports:
       - "8000:8000"
