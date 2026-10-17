@@ -11,11 +11,14 @@ class FakeModelClient:
         answer: str = "fake answer",
         delay_s: float = 0.0,
         error: Exception | None = None,
+        ping_error: Exception | None = None,
     ) -> None:
         self.answer = answer
         self.delay_s = delay_s
         self.error = error
+        self.ping_error = ping_error
         self.prompts: list[str] = []
+        self.pings = 0
         self.closed = False
 
     def generate(self, prompt: str) -> str:
@@ -30,6 +33,16 @@ class FakeModelClient:
         if self.error is not None:
             raise self.error
         return self.answer
+
+    def ping(self) -> None:
+        """Count the probe and raise ``ping_error``, when one was given.
+
+        Raises:
+            Exception: ``ping_error``, to simulate an unreachable backend.
+        """
+        self.pings += 1
+        if self.ping_error is not None:
+            raise self.ping_error
 
     def close(self) -> None:
         """Mark the client closed."""

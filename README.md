@@ -210,6 +210,7 @@ LLM_PROVIDER=openai uv run python scripts/bench_model.py   # latency check
 | Method | Path      | Response model   | Description                              |
 | ------ | --------- | ---------------- | ---------------------------------------- |
 | GET    | `/health` | `HealthResponse` | Liveness check with service version     |
+| GET    | `/ready` | `ReadyResponse` | Readiness check: the model server answers (`503`/`504` if not) |
 | POST   | `/generate` | `GenerateResponse` | Model completion for a prompt |
 | GET    | `/docs`   | HTML             | Auto-generated Swagger UI (FastAPI)      |
 
@@ -219,6 +220,15 @@ LLM_PROVIDER=openai uv run python scripts/bench_model.py   # latency check
 | --------- | ------------- | --------- |
 | `status`  | `"ok"`        | `"ok"`    |
 | `version` | `str`         | `"0.1.0"` |
+
+`/health` only says the app process is up, so a container can use it as a liveness
+probe without depending on the model. `/ready` also checks that the model server
+answers (a cheap `GET` on its `/models` listing, bounded by
+`LLM_CONNECT_TIMEOUT_S`), so use it to see whether `/generate` can work:
+
+```bash
+curl http://127.0.0.1:8000/ready
+```
 
 `POST /generate` takes a `GenerateRequest` body and returns a `GenerateResponse`.
 The model call runs in a worker thread, so `/health` keeps answering while a slow
@@ -266,7 +276,8 @@ Assignment_for_6700/
     ├── test_generate.py       # /generate endpoint, health during a slow request
     ├── test_health.py         # /health endpoint tests
     ├── test_model_client.py   # client lifecycle and dependency override
-    └── test_openai_client.py  # model settings, HTTP client, error mapping
+    ├── test_openai_client.py  # model settings, HTTP client, error mapping
+    └── test_ready.py          # /ready endpoint and the client ping
 ```
 
 ### Continuous integration

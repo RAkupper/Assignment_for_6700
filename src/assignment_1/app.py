@@ -86,6 +86,30 @@ def health() -> HealthResponse:
     return HealthResponse(status="ok", version=app.version)
 
 
+class ReadyResponse(BaseModel):
+    """Typed body returned when the model backend is reachable."""
+
+    status: Literal["ready"]
+
+
+@app.get(
+    "/ready",
+    response_model=ReadyResponse,
+    responses={503: {"model": ErrorResponse}, 504: {"model": ErrorResponse}},
+)
+def ready(model: Annotated[ModelClient, Depends(get_model_client)]) -> ReadyResponse:
+    """Confirm the model backend answers, unlike ``/health`` which only checks the app.
+
+    A plain ``def`` route runs in a worker thread, so the blocking probe does not
+    stall the event loop. Failures become 503 or 504 through ``model_error_handler``.
+
+    Returns:
+        ReadyResponse: ``ready`` when the model server answered.
+    """
+    model.ping()
+    return ReadyResponse(status="ready")
+
+
 class GenerateRequest(BaseModel):
     """Prompt sent to the model."""
 

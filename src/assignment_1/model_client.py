@@ -15,6 +15,10 @@ class ModelClient(Protocol):
         """Return the model's completion for a prompt."""
         ...
 
+    def ping(self) -> None:
+        """Return if the model backend answers; raise a ModelClientError if not."""
+        ...
+
     def close(self) -> None:
         """Release connections or other resources held by the client."""
         ...
@@ -38,6 +42,9 @@ class EchoModelClient:
     def generate(self, prompt: str) -> str:
         """Return the prompt unchanged."""
         return prompt
+
+    def ping(self) -> None:
+        """Nothing to reach, so always ready."""
 
     def close(self) -> None:
         """Nothing to release."""
@@ -108,6 +115,32 @@ class OpenAICompatibleClient:
         if not isinstance(content, str):
             raise ModelClientError("model server returned non-text content")
         return content
+
+    def ping(self) -> None:
+        """Check that the model server answers, using the cheap ``/models`` listing.
+
+        The connect timeout bounds the whole call, so a readiness probe never waits
+        as long as a generation does.
+
+        Raises:
+            ModelTimeoutError: no answer within ``LLM_CONNECT_TIMEOUT_S``.
+            ModelUnavailableError: the server was unreachable or returned an error.
+        """
+        timeout = self.settings.connect_timeout_s
+        try:
+            self._http.get("models", timeout=timeout).raise_for_status()
+        except httpx2.TimeoutException as exc:
+            raise ModelTimeoutError(
+                f"model server did not answer within {timeout}s"
+            ) from exc
+        except httpx2.HTTPStatusError as exc:
+            raise ModelUnavailableError(
+                f"model server returned HTTP {exc.response.status_code}"
+            ) from exc
+        except httpx2.RequestError as exc:
+            raise ModelUnavailableError(
+                f"could not reach model server at {self.settings.base_url}"
+            ) from exc
 
     def close(self) -> None:
         """Close the pooled HTTP connections."""
