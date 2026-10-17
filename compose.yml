@@ -1,0 +1,60 @@
+# Service stack: the FastAPI app plus the model server it calls over HTTP.
+#
+# Fresh clone on the instance:   docker compose up -d
+# Defaults come from .env.production.example (no secrets). Put overrides and any
+# hosted-API key in an untracked .env; its values win over the example file and
+# over the LLM_* defaults below. The first start downloads the model weights.
+#
+# The model server is llama.cpp rather than Ollama because the Ollama image alone
+# (3.78 GB) does not fit next to a model on the 20 GB m3.small root disk.
+# To use the class model server instead, set in .env:
+#   LLM_BASE_URL=http://10.1.82.181:8000/v1
+#   LLM_MODEL=Qwen/Qwen2.5-14B-Instruct-AWQ
+
+services:
+  llm:
+    image: ghcr.io/ggml-org/llama.cpp:server@sha256:f41d47eee678c02656eefc9ed8cce76cab584aa7032805eeef0e6639fcfda485
+    command:
+      - -hf
+      - ${LLM_HF_REPO:-Qwen/Qwen2.5-1.5B-Instruct-GGUF:Q4_K_M}
+      - --alias
+      - ${LLM_MODEL:-qwen2.5-1.5b-instruct}
+      - -c
+      - "4096"
+    environment:
+      LLAMA_CACHE: /models
+    volumes:
+      - llm-models:/models
+    # /health answers 503 while the model loads and 200 once it can serve.
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 120s
+    restart: unless-stopped
+
+  app:
+    build: .
+    env_file:
+      - path: .env.production.example
+        required: true
+      - path: .env
+        required: false
+    environment:
+      LLM_PROVIDER: ${LLM_PROVIDER:-openai}
+      LLM_BASE_URL: ${LLM_BASE_URL:-http://llm:8080/v1}
+      LLM_MODEL: ${LLM_MODEL:-qwen2.5-1.5b-instruct}
+      # 2 vCPUs generate ~25 tokens/s, so long answers under concurrent load
+      # would exceed the 120 s client timeout.
+      LLM_MAX_TOKENS: ${LLM_MAX_TOKENS:-128}
+    ports:
+      - "8000:8000"
+    depends_on:
+      llm:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  llm-models:
+    name: llm-models
