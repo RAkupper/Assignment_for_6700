@@ -1,4 +1,5 @@
 # Service stack: the FastAPI app plus the model server it calls over HTTP.
+# How to start, check and troubleshoot it on Jetstream2: docs/deployment.md
 #
 # Fresh clone on the instance:   docker compose up -d
 # Defaults come from .env.production.example (no secrets). Put overrides and any
