@@ -98,6 +98,36 @@ The saved model is intended to be loaded once at API startup when `/predict` is
 implemented; training does not run as part of service startup or a request.
 Keep `models/digits.joblib` with the project and include it in the Docker image.
 
+### Measure concurrent prediction requests
+
+In one terminal, run a single server worker (use the same command before and
+after the blocking-call fix):
+
+```bash
+uv run uvicorn myapp.app:app --host 127.0.0.1 --port 8000 --workers 1
+```
+
+In another terminal, send ten concurrent requests:
+
+```bash
+uv run python scripts/benchmark_predict.py --output measurements/before.json
+```
+
+The script shares one `httpx.AsyncClient` across ten POST requests, each with the
+same valid input of 64 zero-valued pixels. `asyncio.gather` schedules them
+concurrently and waits for all ten responses. It reports each request's duration,
+the batch wall-clock time, and the slowest request. Individual timing starts just
+before `client.post` and ends when the response body arrives; batch timing starts
+just before `gather` and ends when all ten requests finish. Client creation and
+printing/saving results are outside the batch timer. There are no warm-up requests.
+
+After fixing the handler and restarting the server, run the same script with
+`--output measurements/after.json`. The client remains asynchronous in both runs;
+the server-side blocking call is what changes. A fast model may hide the effect:
+if adding `time.sleep` to simulate a slow call, retain the same delay in both
+versions and document it. Request durations include queueing and network overhead,
+so they do not isolate model execution time.
+
 ### Run the tests
 
 ```bash

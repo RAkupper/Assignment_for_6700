@@ -1,5 +1,6 @@
 """FastAPI application: service instance, response models and routes."""
 
+import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Annotated, Literal
@@ -64,7 +65,8 @@ def health() -> HealthResponse:
 
 
 @app.post("/predict", response_model=PredictResponse)
-def predict(body: PredictRequest, request: Request) -> PredictResponse:
+async def predict(body: PredictRequest, request: Request) -> PredictResponse:
     """Predict a digit using the model loaded at startup."""
+    time.sleep(1)
     prediction = request.app.state.model.predict([body.pixels])
     return PredictResponse(digit=int(prediction[0]))
