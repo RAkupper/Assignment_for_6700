@@ -98,6 +98,55 @@ The saved model is intended to be loaded once at API startup when `/predict` is
 implemented; training does not run as part of service startup or a request.
 Keep `models/digits.joblib` with the project and include it in the Docker image.
 
+### Measure concurrent prediction requests
+
+Run these commands from the project root. Start on your working branch with
+local changes committed. Both `blocking-before` and `blocking-after` must be
+available locally; if needed, download the tags with `git fetch origin --tags`.
+
+In terminal 1, remember your branch, switch to the blocking version, install its
+dependencies, and start one server worker:
+
+```bash
+audit_branch=$(git branch --show-current)
+git switch --detach blocking-before
+uv sync --extra dev --frozen
+uv run uvicorn myapp.app:app --host 127.0.0.1 --port 8000 --workers 1
+```
+
+Wait for `Application startup complete`. In terminal 2, send ten concurrent
+requests and save a new measurement without overwriting the original results:
+
+```bash
+uv run python scripts/benchmark_predict.py --output measurements/before-rerun.json
+```
+
+After the benchmark finishes, press `Ctrl+C` in terminal 1 to stop the server.
+Switch to the fixed version and start the server again:
+
+```bash
+git switch --detach blocking-after
+uv sync --extra dev --frozen
+uv run uvicorn myapp.app:app --host 127.0.0.1 --port 8000 --workers 1
+```
+
+Wait for startup, then run the same benchmark in terminal 2:
+
+```bash
+uv run python scripts/benchmark_predict.py --output measurements/after-rerun.json
+```
+
+Stop the server with `Ctrl+C` in terminal 1, then return to your original branch
+in that same terminal:
+
+```bash
+git switch "$audit_branch"
+```
+
+The tags are checked out in detached HEAD mode for inspection and testing; make
+further changes on your working branch after returning to it.
+
+
 ### Run the tests
 
 ```bash

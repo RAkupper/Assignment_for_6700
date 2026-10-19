@@ -1,5 +1,7 @@
 """FastAPI application: service instance, response models and routes."""
 
+import asyncio
+import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Annotated, Literal
@@ -64,7 +66,13 @@ def health() -> HealthResponse:
 
 
 @app.post("/predict", response_model=PredictResponse)
-def predict(body: PredictRequest, request: Request) -> PredictResponse:
-    """Predict a digit using the model loaded at startup."""
-    prediction = request.app.state.model.predict([body.pixels])
-    return PredictResponse(digit=int(prediction[0]))
+async def predict(body: PredictRequest, request: Request) -> PredictResponse:
+    """Run blocking prediction in a worker thread, keeping the event loop free."""
+
+    def run_prediction() -> PredictResponse:
+        # Simulate slow inference with the same delay as blocking-before.
+        time.sleep(1)
+        prediction = request.app.state.model.predict([body.pixels])
+        return PredictResponse(digit=int(prediction[0]))
+
+    return await asyncio.to_thread(run_prediction)
