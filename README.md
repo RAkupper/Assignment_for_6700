@@ -100,33 +100,52 @@ Keep `models/digits.joblib` with the project and include it in the Docker image.
 
 ### Measure concurrent prediction requests
 
-In one terminal, run a single server worker (use the same command before and
-after the blocking-call fix):
+Run these commands from the project root. Start on your working branch with
+local changes committed. Both `blocking-before` and `blocking-after` must be
+available locally; if needed, download the tags with `git fetch origin --tags`.
+
+In terminal 1, remember your branch, switch to the blocking version, install its
+dependencies, and start one server worker:
 
 ```bash
+audit_branch=$(git branch --show-current)
+git switch --detach blocking-before
+uv sync --extra dev --frozen
 uv run uvicorn myapp.app:app --host 127.0.0.1 --port 8000 --workers 1
 ```
 
-In another terminal, send ten concurrent requests:
+Wait for `Application startup complete`. In terminal 2, send ten concurrent
+requests and save a new measurement without overwriting the original results:
 
 ```bash
-uv run python scripts/benchmark_predict.py --output measurements/before.json
+uv run python scripts/benchmark_predict.py --output measurements/before-rerun.json
 ```
 
-The script shares one `httpx.AsyncClient` across ten POST requests, each with the
-same valid input of 64 zero-valued pixels. `asyncio.gather` schedules them
-concurrently and waits for all ten responses. It reports each request's duration,
-the batch wall-clock time, and the slowest request. Individual timing starts just
-before `client.post` and ends when the response body arrives; batch timing starts
-just before `gather` and ends when all ten requests finish. Client creation and
-printing/saving results are outside the batch timer. There are no warm-up requests.
+After the benchmark finishes, press `Ctrl+C` in terminal 1 to stop the server.
+Switch to the fixed version and start the server again:
 
-After fixing the handler and restarting the server, run the same script with
-`--output measurements/after.json`. The client remains asynchronous in both runs;
-the server-side blocking call is what changes. A fast model may hide the effect:
-if adding `time.sleep` to simulate a slow call, retain the same delay in both
-versions and document it. Request durations include queueing and network overhead,
-so they do not isolate model execution time.
+```bash
+git switch --detach blocking-after
+uv sync --extra dev --frozen
+uv run uvicorn myapp.app:app --host 127.0.0.1 --port 8000 --workers 1
+```
+
+Wait for startup, then run the same benchmark in terminal 2:
+
+```bash
+uv run python scripts/benchmark_predict.py --output measurements/after-rerun.json
+```
+
+Stop the server with `Ctrl+C` in terminal 1, then return to your original branch
+in that same terminal:
+
+```bash
+git switch "$audit_branch"
+```
+
+The tags are checked out in detached HEAD mode for inspection and testing; make
+further changes on your working branch after returning to it.
+
 
 ### Run the tests
 
