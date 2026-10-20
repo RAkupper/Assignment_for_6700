@@ -6,6 +6,7 @@ exposes a typed `/health` endpoint; later assignments will put a model behind it
 ## Contents
 
 - [Quickstart](#quickstart) (tutorial: clean machine to running service)
+- [Docker](#docker) (build, run, and check the container)
 - [How-to guides](#how-to-guides) (tests, linting, pre-commit, adding dependencies)
 - [Reference](#reference) (endpoints, project layout, CI pipeline)
 - [Explanation](#explanation) (why the project is structured this way)
@@ -78,6 +79,38 @@ Expected response:
 
 Interactive API docs are at <http://127.0.0.1:8000/docs>. Press `Ctrl+C` to stop the
 server.
+
+## Docker
+
+Build the application image:
+
+```bash
+docker build -t immigration-app:dev .
+```
+
+Run with configuration supplied at runtime:
+
+```bash
+docker run -d --name immigration-app-test \
+  -p 127.0.0.1:8000:8000 \
+  --env-file .env.production.example \
+  immigration-app:dev
+```
+
+Check the service:
+
+```bash
+curl http://127.0.0.1:8000/health
+```
+
+Expected response:
+
+```json
+{"status":"ok","version":"0.1.0"}
+```
+
+See [Docker setup](docs/docker.md) for container health checks,
+cleanup commands, image size, and rebuild measurements.
 
 ## How-to guides
 
