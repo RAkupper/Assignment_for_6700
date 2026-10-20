@@ -29,7 +29,8 @@ TEAM02 (Jetstream2 m3.small: 2 vCPUs, 6 GB RAM, 20 GB disk)
 
 1. In [Exosphere](https://jetstream2.exosphere.app), open TEAM02. If it is shelved,
    choose **Actions → Unshelve** and wait for **Ready**.
-2. Copy the **public IP** from the instance page. It changes after every unshelve.
+2. Copy the **public IP** from the instance page. We keep it when shelving, so it
+   stays `149.165.150.147`; if it ever differs, use the one shown there.
 3. From your laptop (your SSH key must be in the instance's `authorized_keys`):
 
    ```bash
@@ -111,5 +112,23 @@ LLM_MODEL=Qwen/Qwen2.5-14B-Instruct-AWQ
   again 8 s after a Docker restart.
 - Generation: about 25 tokens/s for one request; 10 concurrent requests of up to 64
   tokens finish in 23 s (slowest 22.9 s).
-- Disk: the llama.cpp image takes about 1.1 GB and the model 1.1 GB; 4.7 GB stays free
-  before the app image.
+- Full stack from a fresh clone: `docker compose up -d --build` builds the app image
+  and has both services healthy in 14 s. Starting again from an empty `llm-models`
+  volume (model download and load included) takes 13 s to a healthy app.
+- From a laptop: `/health` returns 200 in 0.06 s; the model port 8080 is not reachable
+  from outside.
+- Shelve and unshelve: both containers came back on their own at boot
+  (`restart: unless-stopped`), and `/health` answered from outside without anyone
+  logging in.
+- App image: 208 MB. With the stack up, 4.4 GB of the root disk stays free.
+- `docker system df` with the stack up:
+
+  ```text
+  TYPE            TOTAL     ACTIVE    SIZE      RECLAIMABLE
+  Images          5         5         2.82GB    2.82GB (100%)
+  Containers      5         4         27.11MB   12.29kB (0%)
+  Local Volumes   1         1         1.117GB   0B (0%)
+  Build Cache     19        0         359.4MB   151.5MB
+  ```
+
+  Three of the five images are Exosphere's own web shell (Guacamole) containers.
