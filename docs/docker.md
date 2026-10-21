@@ -104,5 +104,8 @@ docker rm immigration-app-test
 
 ## Compose deployment
 
-The app listens on 8000 and has its own health check. `compose.yml` builds this image
-and runs it with the llama.cpp server, see [deployment.md](deployment.md).
+The Dockerfile serves the app on port 8000 and provides its Docker health
+check. It is designed for the Compose stack in PR #15, tracked by issue #14.
+
+Jetstream2 deployment, external access, restart verification, and instance
+disk measurements are covered by the deployment work.

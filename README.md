@@ -1,9 +1,11 @@
 # Assignment_for_6700
 
-FastAPI service for our DSAN 6700 project. It has two models: a scikit-learn digit
-classifier inside the app (`/predict`) and Qwen2.5-1.5B-Instruct running in a
-llama.cpp container (`/generate`). We deploy it on Jetstream2 with
-`docker compose up -d`.
+An installable FastAPI service skeleton for our course ML inference API. This week it
+exposes a typed `/health` endpoint; later assignments will put a model behind it.
+
+Update for HW2: it now has two models, a scikit-learn digit classifier inside the app
+(`/predict`) and Qwen2.5-1.5B-Instruct running in a llama.cpp container
+(`/generate`). We deploy it on Jetstream2 with `docker compose up -d`.
 
 ## Contents
 
@@ -261,8 +263,9 @@ evaluates it on a held-out 20% test split, and saves `models/digits.joblib`.
 The split uses a fixed random seed for reproducibility. No dataset download or
 GPU is needed. The model takes 64 pixel values (0–16) and predicts a digit (0–9).
 
-The app loads this file at startup for `/predict`. The file is committed and gets
-copied into the Docker image.
+The saved model is intended to be loaded once at API startup when `/predict` is
+implemented; training does not run as part of service startup or a request.
+Keep `models/digits.joblib` with the project and include it in the Docker image.
 
 ### Measure concurrent prediction requests
 
@@ -472,7 +475,7 @@ Assignment_for_6700/
 │   ├── ISSUE_TEMPLATE/        # bug report, documentation, feature request
 │   └── workflows/ci.yml       # GitHub Actions quality gates
 ├── .env.local.example         # local development settings
-├── .env.production.example    # deployed settings, read by compose at run time
+├── .env.production.example    # deployed settings
 ├── .dockerignore              # keeps env files, .venv and .git out of the image
 ├── .pre-commit-config.yaml    # Git hooks (ruff, hygiene checks)
 ├── .python-version            # Python 3.13, read by uv and CI
@@ -489,16 +492,14 @@ Assignment_for_6700/
 │   ├── model_client.py        # ModelClient protocol, echo and OpenAI-compatible clients
 │   └── main.py                # CLI entry-point placeholder
 ├── models/digits.joblib       # trained digits classifier loaded at startup
-├── docs/
-│   ├── deployment.md          # running the stack on Jetstream2, measurements
-│   ├── docker.md              # building and checking the app image
-│   └── model-serving.md       # where the model runs and why
+├── docs/model-serving.md      # model architecture decision and measurements
+├── docs/deployment.md         # running the stack on Jetstream2, measurements
+├── docs/docker.md             # building and checking the app image
 ├── measurements/              # before/after results of the blocking-call audit
 ├── outputs/docker/            # raw Docker build logs and timings
-├── scripts/
-│   ├── bench_model.py         # latency benchmark through the service's client
-│   ├── benchmark_predict.py   # ten concurrent /predict requests for the audit
-│   └── train_digits.py        # trains and saves models/digits.joblib
+├── scripts/bench_model.py     # latency benchmark through the service's client
+├── scripts/benchmark_predict.py  # ten concurrent /predict requests for the audit
+├── scripts/train_digits.py    # trains and saves models/digits.joblib
 └── tests/
     ├── conftest.py, fakes.py  # FakeModelClient and its fast and slow fixtures
     ├── test_config.py         # Settings validation tests
@@ -531,7 +532,7 @@ A failure at any step fails the run. See results under the repository's
 - **pyproject.toml + hatchling.** One standard file declares the build backend,
   dependencies and tool settings; no `setup.py`.
 - **uv.lock.** A committed lockfile makes installs reproducible across laptops, CI
-  and the Docker image on our Jetstream2 instance.
+  and, later, our Jetstream2 deployment.
 - **Language model in its own container.** The weights (1.1 GB) stay in a volume
   instead of the app image, and we can switch models with env vars without
   rebuilding.
