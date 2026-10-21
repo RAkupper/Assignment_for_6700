@@ -176,6 +176,34 @@ sync.
 | `APP_ENVIRONMENT` | `development` | Must be `development` or `production`. |
 | `APP_DEBUG` | `false` | Boolean debug flag; must be `false` in production. |
 
+Model settings use the `LLM_` prefix and are read by `ModelSettings` in the same
+file. The defaults need no model server (`LLM_PROVIDER=echo`), so tests and CI run
+anywhere.
+
+| Variable | Default | Meaning and validation |
+| -------- | ------- | ---------------------- |
+| `LLM_PROVIDER` | `echo` | `echo` (returns the prompt) or `openai` (any OpenAI-compatible server: Ollama, vLLM, hosted API). Must not be `echo` in production. |
+| `LLM_BASE_URL` | `http://localhost:11434/v1` | Server root including `/v1`; must be a valid URL. |
+| `LLM_MODEL` | `qwen2.5:1.5b-instruct` | Model name as the server knows it. |
+| `LLM_API_KEY` | unset | Bearer token for hosted APIs; kept secret in logs and reprs. |
+| `LLM_TIMEOUT_S` / `LLM_CONNECT_TIMEOUT_S` | `120` / `5` | Seconds; must be positive. |
+| `LLM_MAX_TOKENS` | `512` | Must be positive. |
+| `LLM_TEMPERATURE` | `0.0` | Between 0 and 2. |
+| `LLM_DEVICE` | `cpu` | `cpu`, `cuda` or `auto`; read by the model server. |
+| `LLM_CACHE_DIR` | `/models` | Where the model server keeps weights (a mounted volume). |
+
+Model failures reach clients as `504` (timeout), `503` (server unreachable or
+erroring) or `502` (malformed reply). See
+[docs/model-serving.md](docs/model-serving.md) for where the model runs and why.
+
+### Run against a local model
+
+```bash
+ollama pull qwen2.5:1.5b-instruct     # once; needs https://ollama.com installed
+LLM_PROVIDER=openai uv run uvicorn assignment_1.app:app --reload
+LLM_PROVIDER=openai uv run python scripts/bench_model.py   # latency check
+```
+
 
 ### Endpoints
 
@@ -207,11 +235,17 @@ Assignment_for_6700/
 ├── src/assignment_1/
 │   ├── __init__.py
 │   ├── app.py                 # FastAPI app, Pydantic models, routes
-│   ├── config.py              # typed Settings read from the environment
+│   ├── config.py              # typed Settings and ModelSettings from the environment
+│   ├── model_client.py        # ModelClient protocol, echo and OpenAI-compatible clients
 │   └── main.py                # CLI entry-point placeholder
+├── docs/model-serving.md      # model architecture decision and measurements
+├── scripts/bench_model.py     # latency benchmark through the service's client
 └── tests/
+    ├── conftest.py, fakes.py  # FakeModelClient and its fixture
     ├── test_config.py         # Settings validation tests
-    └── test_health.py         # /health endpoint tests
+    ├── test_health.py         # /health endpoint tests
+    ├── test_model_client.py   # client lifecycle and dependency override
+    └── test_openai_client.py  # model settings, HTTP client, error mapping
 ```
 
 ### Continuous integration
