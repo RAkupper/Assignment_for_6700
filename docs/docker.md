@@ -54,6 +54,28 @@ a 10-second startup period, and 3 retries.
 
 ## Build measurements
 
+### Final image, on TEAM02
+
+Measured on our Jetstream2 instance (m3.small: 2 vCPUs, 6 GB RAM) with the final
+`main`, which adds scikit-learn, numpy and scipy for `/predict`.
+
+| Measurement | Result |
+| --- | --- |
+| Image size (`docker image ls`) | 472 MB |
+| Rebuild after a one-line change, dependency layer cached | 13.1 seconds |
+| Rebuild after a one-line change, `--no-cache` | 15.6 seconds |
+
+A comment line was appended to `src/myapp/main.py`, the image was rebuilt with
+`docker compose build app` and then with `docker compose build --no-cache app`, and
+the change was reverted. The gap is small because uv installs the 25 packages in
+under 0.1 s; most of each build is copying the roughly 400 MB virtual environment
+into the runtime stage and exporting the image, which happens either way.
+
+`docker system df` with the stack running is in
+[deployment.md](deployment.md#measured-on-team02).
+
+### Earlier image, before scikit-learn
+
 Measured locally on Windows with Docker Desktop and WSL2 Ubuntu 22.04.
 Docker reported 24 CPUs and 31.2 GiB of memory.
 
@@ -84,7 +106,6 @@ docker rm immigration-app-test
 ## Compose deployment
 
 The Dockerfile serves the app on port 8000 and provides its Docker health
-check. It is designed for the Compose stack in PR #15, tracked by issue #14.
-
-Jetstream2 deployment, external access, restart verification, and instance
-disk measurements are covered by the deployment work.
+check. `compose.yml` builds it and runs it next to the llama.cpp model server;
+see [deployment.md](deployment.md) for the Jetstream2 deployment, external access,
+restart checks and disk usage.

@@ -108,27 +108,41 @@ LLM_MODEL=Qwen/Qwen2.5-14B-Instruct-AWQ
 
 ## Measured on TEAM02
 
+Final `main`, m3.small (2 vCPUs, 6 GB RAM, 20 GB root disk):
+
+- Fresh clone, `docker compose up -d --build`: both services healthy in 37 s, including
+  building the app image with scikit-learn. (Before scikit-learn it was 14 s, and 13 s
+  starting from an empty `llm-models` volume with the model download included.)
+- From a laptop:
+
+  | Request | Result |
+  | --- | --- |
+  | `GET /health` | 200, `{"status":"ok","version":"0.1.0"}`, 0.06 s |
+  | `GET /ready` | 200, `{"status":"ready"}` |
+  | `POST /predict` (a "0" from the digits dataset) | 200, `{"digit":0}`, 1.08 s (1 s is the audit delay) |
+  | `POST /predict` with 3 pixels | 422 |
+  | `POST /generate` | 200, a correct one-sentence answer about OPT, 1.7 s |
+  | `POST /generate` with a blank prompt | 422 |
+  | port 8080 (model server) | not reachable from outside |
+
+- Shelve and unshelve, checked on Oct 20 and Oct 21: both containers came back on their
+  own at boot (`restart: unless-stopped`), and `/health` answered from outside before
+  anyone logged in. The public IP stays the same because we keep it when shelving.
 - llm container: healthy 6 s after start with the weights already in the volume, and
-  again 8 s after a Docker restart.
+  8 s after a Docker restart.
 - Generation: about 25 tokens/s for one request; 10 concurrent requests of up to 64
   tokens finish in 23 s (slowest 22.9 s).
-- Full stack from a fresh clone: `docker compose up -d --build` builds the app image
-  and has both services healthy in 14 s. Starting again from an empty `llm-models`
-  volume (model download and load included) takes 13 s to a healthy app.
-- From a laptop: `/health` returns 200 in 0.06 s; the model port 8080 is not reachable
-  from outside.
-- Shelve and unshelve: both containers came back on their own at boot
-  (`restart: unless-stopped`), and `/health` answered from outside without anyone
-  logging in.
-- App image: 208 MB. With the stack up, 4.4 GB of the root disk stays free.
-- `docker system df` with the stack up:
+- App image: 472 MB. Rebuild after a one-line change: 13.1 s with the dependency layer
+  cached, 15.6 s with `--no-cache` (details in [docker.md](docker.md#build-measurements)).
+- `docker system df` with the stack up, after `docker builder prune`:
 
   ```text
   TYPE            TOTAL     ACTIVE    SIZE      RECLAIMABLE
-  Images          5         5         2.82GB    2.82GB (100%)
-  Containers      5         4         27.11MB   12.29kB (0%)
+  Images          5         5         2.944GB   2.944GB (100%)
+  Containers      5         4         27.12MB   12.29kB (0%)
   Local Volumes   1         1         1.117GB   0B (0%)
-  Build Cache     19        0         359.4MB   151.5MB
+  Build Cache     0         0         0B        0B
   ```
 
-  Three of the five images are Exosphere's own web shell (Guacamole) containers.
+  Three of the five images are Exosphere's own web shell (Guacamole) containers. 3.4 GB
+  of the root disk stays free.
