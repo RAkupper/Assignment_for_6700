@@ -176,12 +176,42 @@ sync.
 | `APP_ENVIRONMENT` | `development` | Must be `development` or `production`. |
 | `APP_DEBUG` | `false` | Boolean debug flag; must be `false` in production. |
 
+Model settings use the `LLM_` prefix and are read by `ModelSettings` in the same
+file. The defaults need no model server (`LLM_PROVIDER=echo`), so tests and CI run
+anywhere.
+
+| Variable | Default | Meaning and validation |
+| -------- | ------- | ---------------------- |
+| `LLM_PROVIDER` | `echo` | `echo` (returns the prompt) or `openai` (any OpenAI-compatible server: Ollama, vLLM, hosted API). Must not be `echo` in production. |
+| `LLM_BASE_URL` | `http://localhost:11434/v1` | Server root including `/v1`; must be a valid URL. |
+| `LLM_MODEL` | `qwen2.5:1.5b-instruct` | Model name as the server knows it. |
+| `LLM_API_KEY` | unset | Bearer token for hosted APIs; kept secret in logs and reprs. |
+| `LLM_TIMEOUT_S` / `LLM_CONNECT_TIMEOUT_S` | `120` / `5` | Seconds; must be positive. |
+| `LLM_MAX_TOKENS` | `512` | Must be positive. |
+| `LLM_TEMPERATURE` | `0.0` | Between 0 and 2. |
+| `LLM_DEVICE` | `cpu` | `cpu`, `cuda` or `auto`; read by the model server. |
+| `LLM_CACHE_DIR` | `/models` | Where the model server keeps weights (a mounted volume). |
+
+Model failures reach clients as `504` (timeout), `503` (server unreachable or
+erroring) or `502` (malformed reply). See
+[docs/model-serving.md](docs/model-serving.md) for where the model runs and why.
+
+### Run against a local model
+
+```bash
+ollama pull qwen2.5:1.5b-instruct     # once; needs https://ollama.com installed
+LLM_PROVIDER=openai uv run uvicorn assignment_1.app:app --reload
+LLM_PROVIDER=openai uv run python scripts/bench_model.py   # latency check
+```
+
 
 ### Endpoints
 
 | Method | Path      | Response model   | Description                              |
 | ------ | --------- | ---------------- | ---------------------------------------- |
 | GET    | `/health` | `HealthResponse` | Liveness check with service version     |
+| GET    | `/ready` | `ReadyResponse` | Readiness check: the model server answers (`503`/`504` if not) |
+| POST   | `/generate` | `GenerateResponse` | Model completion for a prompt |
 | GET    | `/docs`   | HTML             | Auto-generated Swagger UI (FastAPI)      |
 
 `HealthResponse` fields:
@@ -190,6 +220,34 @@ sync.
 | --------- | ------------- | --------- |
 | `status`  | `"ok"`        | `"ok"`    |
 | `version` | `str`         | `"0.1.0"` |
+
+`/health` only says the app process is up, so a container can use it as a liveness
+probe without depending on the model. `/ready` also checks that the model server
+answers (a cheap `GET` on its `/models` listing, bounded by
+`LLM_CONNECT_TIMEOUT_S`), so use it to see whether `/generate` can work:
+
+```bash
+curl http://127.0.0.1:8000/ready
+```
+
+`POST /generate` takes a `GenerateRequest` body and returns a `GenerateResponse`.
+The model call runs in a worker thread, so `/health` keeps answering while a slow
+generation is in flight.
+
+| Model | Field | Type | Validation or example |
+| --- | --- | --- | --- |
+| `GenerateRequest` | `prompt` | `str` | Leading and trailing whitespace stripped; 1 to 4,000 characters, otherwise `422` |
+| `GenerateResponse` | `completion` | `str` | `"OPT is a period of practical training..."` |
+
+```bash
+curl -X POST http://127.0.0.1:8000/generate \
+  -H "Content-Type: application/json" \
+  -d '{"prompt": "What is OPT?"}'
+```
+
+With the default `LLM_PROVIDER=echo` the completion is the prompt itself, which
+confirms the wiring without a model server. Model failures return `504`, `503` or
+`502` as described under [Configuration](#configuration).
 
 ### Project layout
 
@@ -207,11 +265,19 @@ Assignment_for_6700/
 ├── src/assignment_1/
 │   ├── __init__.py
 │   ├── app.py                 # FastAPI app, Pydantic models, routes
-│   ├── config.py              # typed Settings read from the environment
+│   ├── config.py              # typed Settings and ModelSettings from the environment
+│   ├── model_client.py        # ModelClient protocol, echo and OpenAI-compatible clients
 │   └── main.py                # CLI entry-point placeholder
+├── docs/model-serving.md      # model architecture decision and measurements
+├── scripts/bench_model.py     # latency benchmark through the service's client
 └── tests/
+    ├── conftest.py, fakes.py  # FakeModelClient and its fast and slow fixtures
     ├── test_config.py         # Settings validation tests
-    └── test_health.py         # /health endpoint tests
+    ├── test_generate.py       # /generate endpoint, health during a slow request
+    ├── test_health.py         # /health endpoint tests
+    ├── test_model_client.py   # client lifecycle and dependency override
+    ├── test_openai_client.py  # model settings, HTTP client, error mapping
+    └── test_ready.py          # /ready endpoint and the client ping
 ```
 
 ### Continuous integration
