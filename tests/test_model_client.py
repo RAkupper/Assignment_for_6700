@@ -7,10 +7,10 @@ import pytest
 from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
 
-from assignment_1 import app as app_module
-from assignment_1.app import app, get_model_client
-from assignment_1.config import ModelSettings, Settings
-from assignment_1.model_client import ModelClient, build_model_client
+from myapp import app as app_module
+from myapp.app import app, get_model_client
+from myapp.config import ModelSettings, Settings
+from myapp.model_client import ModelClient, build_model_client
 from tests.fakes import FakeModelClient
 
 

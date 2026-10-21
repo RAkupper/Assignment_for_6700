@@ -10,9 +10,9 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
-from assignment_1.app import model_error_handler
-from assignment_1.config import ModelSettings, Settings
-from assignment_1.model_client import (
+from myapp.app import model_error_handler
+from myapp.config import ModelSettings, Settings
+from myapp.model_client import (
     EchoModelClient,
     ModelClient,
     ModelClientError,

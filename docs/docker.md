@@ -35,7 +35,7 @@ environments, credentials, and local build files.
 ```bash
 curl http://127.0.0.1:8000/health
 docker exec immigration-app-test id
-docker exec immigration-app-test python -m assignment_1.healthcheck
+docker exec immigration-app-test python -m myapp.healthcheck
 docker inspect --format '{{.State.Health.Status}}' immigration-app-test
 ```
 
@@ -64,7 +64,7 @@ Docker reported 24 CPUs and 31.2 GiB of memory.
 | Rebuild with Docker layer caching disabled | 2.75 seconds |
 
 A single comment line was temporarily added to
-`src/assignment_1/healthcheck.py`. Both builds used that same changed source.
+`src/myapp/healthcheck.py`. Both builds used that same changed source.
 The first build reused the dependency layer. The second used `--no-cache`
 and installed dependencies again. The original source was then restored.
 

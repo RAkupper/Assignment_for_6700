@@ -4,7 +4,7 @@ from typing import Any, Protocol, runtime_checkable
 
 import httpx2
 
-from assignment_1.config import ModelSettings, Settings
+from myapp.config import ModelSettings, Settings
 
 
 @runtime_checkable

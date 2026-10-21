@@ -4,7 +4,7 @@ from collections.abc import Iterator
 
 import pytest
 
-from assignment_1.app import app, get_model_client
+from myapp.app import app, get_model_client
 from tests.fakes import FakeModelClient
 
 

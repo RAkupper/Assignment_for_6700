@@ -12,8 +12,8 @@ import statistics
 import time
 from concurrent.futures import ThreadPoolExecutor
 
-from assignment_1.config import ModelSettings
-from assignment_1.model_client import OpenAICompatibleClient
+from myapp.config import ModelSettings
+from myapp.model_client import OpenAICompatibleClient
 
 PROMPT = (
     "In two sentences, explain when an F-1 student may apply for post-completion "

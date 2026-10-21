@@ -30,12 +30,13 @@ RUN useradd --create-home --uid 10001 appuser
 
 # Copy the installed application and dependencies
 COPY --from=builder /app/.venv /app/.venv
+COPY models/ ./models/
 
 USER appuser
 
 EXPOSE 8000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD ["python", "-m", "assignment_1.healthcheck"]
+    CMD ["python", "-m", "myapp.healthcheck"]
 
-CMD ["uvicorn", "assignment_1.app:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "myapp.app:app", "--host", "0.0.0.0", "--port", "8000"]

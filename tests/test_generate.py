@@ -7,8 +7,8 @@ import httpx2
 import pytest
 from fastapi.testclient import TestClient
 
-from assignment_1.app import GenerateResponse, app
-from assignment_1.model_client import (
+from myapp.app import GenerateResponse, app
+from myapp.model_client import (
     ModelClientError,
     ModelTimeoutError,
     ModelUnavailableError,

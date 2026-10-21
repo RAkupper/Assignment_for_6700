@@ -58,7 +58,7 @@ cp .env.local.example .env
 Then start the service:
 
 ```bash
-uv run uvicorn assignment_1.app:app --reload
+uv run uvicorn myapp.app:app --reload
 ```
 
 You should see `Uvicorn running on http://127.0.0.1:8000`.
@@ -114,6 +114,72 @@ cleanup commands, image size, and rebuild measurements.
 
 ## How-to guides
 
+### Train and save the digits model
+
+Run the training script separately from the API:
+
+```bash
+uv run python scripts/train_digits.py
+```
+
+The script trains an SVM classifier on scikit-learn's built-in 8×8 digits dataset,
+evaluates it on a held-out 20% test split, and saves `models/digits.joblib`.
+The split uses a fixed random seed for reproducibility. No dataset download or
+GPU is needed. The model takes 64 pixel values (0–16) and predicts a digit (0–9).
+
+The saved model is intended to be loaded once at API startup when `/predict` is
+implemented; training does not run as part of service startup or a request.
+Keep `models/digits.joblib` with the project and include it in the Docker image.
+
+### Measure concurrent prediction requests
+
+Run these commands from the project root. Start on your working branch with
+local changes committed. Both `blocking-before` and `blocking-after` must be
+available locally; if needed, download the tags with `git fetch origin --tags`.
+
+In terminal 1, remember your branch, switch to the blocking version, install its
+dependencies, and start one server worker:
+
+```bash
+audit_branch=$(git branch --show-current)
+git switch --detach blocking-before
+uv sync --extra dev --frozen
+uv run uvicorn myapp.app:app --host 127.0.0.1 --port 8000 --workers 1
+```
+
+Wait for `Application startup complete`. In terminal 2, send ten concurrent
+requests and save a new measurement without overwriting the original results:
+
+```bash
+uv run python scripts/benchmark_predict.py --output measurements/before-rerun.json
+```
+
+After the benchmark finishes, press `Ctrl+C` in terminal 1 to stop the server.
+Switch to the fixed version and start the server again:
+
+```bash
+git switch --detach blocking-after
+uv sync --extra dev --frozen
+uv run uvicorn myapp.app:app --host 127.0.0.1 --port 8000 --workers 1
+```
+
+Wait for startup, then run the same benchmark in terminal 2:
+
+```bash
+uv run python scripts/benchmark_predict.py --output measurements/after-rerun.json
+```
+
+Stop the server with `Ctrl+C` in terminal 1, then return to your original branch
+in that same terminal:
+
+```bash
+git switch "$audit_branch"
+```
+
+The tags are checked out in detached HEAD mode for inspection and testing; make
+further changes on your working branch after returning to it.
+
+
 ### Run the tests
 
 ```bash
@@ -123,7 +189,7 @@ uv run pytest
 With a coverage report:
 
 ```bash
-uv run pytest --cov=assignment_1
+uv run pytest --cov=myapp
 ```
 
 ### Lint, format and type-check
@@ -166,7 +232,7 @@ sync.
 
 ### Configuration
 
-`Settings` in `src/assignment_1/config.py` reads environment variables and the
+`Settings` in `src/myapp/config.py` reads environment variables and the
 `.env` file in the working directory. Environment variables take precedence over
 `.env`; missing values use the defaults below.
 
@@ -175,6 +241,7 @@ sync.
 | `APP_NAME` | `assignment-for-6700` | Application title; must not be empty or whitespace-only. |
 | `APP_ENVIRONMENT` | `development` | Must be `development` or `production`. |
 | `APP_DEBUG` | `false` | Boolean debug flag; must be `false` in production. |
+| `APP_MODEL_PATH` | `models/digits.joblib` | Saved digits model loaded at startup; must point to an existing file. |
 
 Model settings use the `LLM_` prefix and are read by `ModelSettings` in the same
 file. The defaults need no model server (`LLM_PROVIDER=echo`), so tests and CI run
@@ -200,7 +267,7 @@ erroring) or `502` (malformed reply). See
 
 ```bash
 ollama pull qwen2.5:1.5b-instruct     # once; needs https://ollama.com installed
-LLM_PROVIDER=openai uv run uvicorn assignment_1.app:app --reload
+LLM_PROVIDER=openai uv run uvicorn myapp.app:app --reload
 LLM_PROVIDER=openai uv run python scripts/bench_model.py   # latency check
 ```
 
@@ -212,6 +279,7 @@ LLM_PROVIDER=openai uv run python scripts/bench_model.py   # latency check
 | GET    | `/health` | `HealthResponse` | Liveness check with service version     |
 | GET    | `/ready` | `ReadyResponse` | Readiness check: the model server answers (`503`/`504` if not) |
 | POST   | `/generate` | `GenerateResponse` | Model completion for a prompt |
+| POST   | `/predict` | `PredictResponse` | Digit (0 to 9) for 64 pixel values (0 to 16) |
 | GET    | `/docs`   | HTML             | Auto-generated Swagger UI (FastAPI)      |
 
 `HealthResponse` fields:
@@ -262,7 +330,7 @@ Assignment_for_6700/
 ├── .python-version            # Python 3.13, read by uv and CI
 ├── pyproject.toml             # metadata, dependencies, tool config
 ├── uv.lock                    # pinned, shared environment
-├── src/assignment_1/
+├── src/myapp/
 │   ├── __init__.py
 │   ├── app.py                 # FastAPI app, Pydantic models, routes
 │   ├── config.py              # typed Settings and ModelSettings from the environment

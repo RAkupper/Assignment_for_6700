@@ -1,16 +1,18 @@
 """FastAPI application: service instance, response models and routes."""
 
 import asyncio
+import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Annotated, Literal
 
+import joblib  # type: ignore[import-untyped]  # joblib does not ship type information.
 from fastapi import Depends, FastAPI, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
-from assignment_1.config import Settings
-from assignment_1.model_client import (
+from myapp.config import Settings
+from myapp.model_client import (
     ModelClient,
     ModelClientError,
     ModelTimeoutError,
@@ -23,13 +25,15 @@ settings = Settings()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    """Create the model client once at startup and close it at shutdown."""
+    """Load the digits model and build the model client once, before serving."""
+    app.state.model = joblib.load(settings.model_path)
     client = build_model_client(settings)
     app.state.model_client = client
     try:
         yield
     finally:
         client.close()
+        del app.state.model
 
 
 app = FastAPI(
@@ -140,3 +144,35 @@ async def generate(
     """
     completion = await asyncio.to_thread(model.generate, body.prompt)
     return GenerateResponse(completion=completion)
+
+
+Pixel = Annotated[int, Field(strict=True, ge=0, le=16)]
+
+
+class PredictRequest(BaseModel):
+    """A flattened 8x8 grayscale image in row-major order."""
+
+    pixels: list[Pixel] = Field(
+        min_length=64,
+        max_length=64,
+        description="64 integer pixels (0–16), read row by row from an 8×8 image.",
+    )
+
+
+class PredictResponse(BaseModel):
+    """The digit recognized by the classifier."""
+
+    digit: Annotated[int, Field(ge=0, le=9)]
+
+
+@app.post("/predict", response_model=PredictResponse)
+async def predict(body: PredictRequest, request: Request) -> PredictResponse:
+    """Run blocking prediction in a worker thread, keeping the event loop free."""
+
+    def run_prediction() -> PredictResponse:
+        # Simulate slow inference with the same delay as blocking-before.
+        time.sleep(1)
+        prediction = request.app.state.model.predict([body.pixels])
+        return PredictResponse(digit=int(prediction[0]))
+
+    return await asyncio.to_thread(run_prediction)

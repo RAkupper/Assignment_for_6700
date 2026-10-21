@@ -6,9 +6,9 @@ import httpx2
 import pytest
 from fastapi.testclient import TestClient
 
-from assignment_1.app import ReadyResponse, app, get_model_client
-from assignment_1.config import ModelSettings
-from assignment_1.model_client import (
+from myapp.app import ReadyResponse, app, get_model_client
+from myapp.config import ModelSettings
+from myapp.model_client import (
     EchoModelClient,
     ModelClientError,
     ModelTimeoutError,
