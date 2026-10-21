@@ -54,22 +54,22 @@ a 10-second startup period, and 3 retries.
 
 ## Build measurements
 
-### Final image (measured on TEAM02)
+### Final image (TEAM02)
 
-We measured again on TEAM02 (m3.small: 2 vCPUs, 6 GB RAM) after everything was
-merged, because scikit-learn, numpy and scipy made the image bigger.
+Measured again on TEAM02 (m3.small) after everything was merged, since scikit-learn
+made the image bigger.
 
 | Measurement | Result |
 | --- | --- |
 | Image size (`docker image ls`) | 472 MB |
-| Rebuild after a one-line change, dependency layer cached | 13.1 seconds |
+| Rebuild after a one-line change, cached | 13.1 seconds |
 | Rebuild after a one-line change, `--no-cache` | 15.6 seconds |
 
-For the rebuild, we added a comment line to `src/myapp/main.py`, ran
-`docker compose build app`, then `docker compose build --no-cache app`, and removed
-the line again. The two times are close because uv installs the packages really fast
-(25 packages in under 0.1 s). Most of the time goes into copying the ~400 MB virtual
-environment into the final stage and exporting the image, which happens either way.
+How: added a comment line to `src/myapp/main.py`, ran `docker compose build app` and
+then `docker compose build --no-cache app`, then removed the line.
+
+The two times are close since uv installs everything in under a second. Most of the
+time is copying the venv (~400 MB) into the final image, which happens both times.
 
 `docker system df` is in [deployment.md](deployment.md#measured-on-team02).
 
@@ -104,6 +104,5 @@ docker rm immigration-app-test
 
 ## Compose deployment
 
-The Dockerfile runs the app on port 8000 with its own health check. `compose.yml`
-builds it and runs it next to the llama.cpp model server. See
-[deployment.md](deployment.md) for how we run it on Jetstream2.
+The app listens on 8000 and has its own health check. `compose.yml` builds this image
+and runs it with the llama.cpp server, see [deployment.md](deployment.md).

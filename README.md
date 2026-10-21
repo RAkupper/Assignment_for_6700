@@ -1,14 +1,14 @@
 # Assignment_for_6700
 
-A FastAPI service for our DSAN 6700 project. It has two models: a scikit-learn digit
-classifier that runs inside the app (`POST /predict`), and a small language model
-(Qwen2.5-1.5B-Instruct) that runs in its own llama.cpp container (`POST /generate`).
-Everything starts with `docker compose up -d` on our Jetstream2 instance.
+FastAPI service for our DSAN 6700 project. It has two models: a scikit-learn digit
+classifier inside the app (`/predict`) and Qwen2.5-1.5B-Instruct running in a
+llama.cpp container (`/generate`). We deploy it on Jetstream2 with
+`docker compose up -d`.
 
 ## Contents
 
 - [Quickstart](#quickstart) (tutorial: clean machine to running service)
-- [Deploy with Compose](#deploy-with-compose) (run the full stack on an instance and try every endpoint)
+- [Deploy with Compose](#deploy-with-compose) (run everything on an instance)
 - [Docker](#docker) (build, run, and check the container)
 - [How-to guides](#how-to-guides) (tests, linting, pre-commit, adding dependencies)
 - [Reference](#reference) (endpoints, project layout, CI pipeline)
@@ -85,23 +85,21 @@ server.
 
 ## Deploy with Compose
 
-We run the whole stack on our Jetstream2 instance (TEAM02) with Docker Compose. The
-same steps should work on any Linux machine with Docker. More details and our
-measurements are in [docs/deployment.md](docs/deployment.md).
+This is how we run it on our Jetstream2 instance (TEAM02). It should work on any Linux
+machine with Docker. More notes in [docs/deployment.md](docs/deployment.md).
 
-### 1. Prerequisites
+### 1. Requirements
 
-- Docker and Docker Compose 2.24 or newer. Check with:
+- Docker and Docker Compose 2.24 or newer:
 
   ```bash
   docker compose version
   ```
 
-- Port 8000 open. On a Jetstream2 instance made in Exosphere, Docker is already
-  installed and the port is open by default.
-- About 4 GB of free disk (app image ~470 MB, llama.cpp image ~1.2 GB, model 1.1 GB).
+- Port 8000 open (Exosphere instances already have this)
+- About 4 GB of free disk
 
-### 2. Start the stack
+### 2. Start it
 
 ```bash
 git clone https://github.com/RAkupper/Assignment_for_6700.git
@@ -109,52 +107,51 @@ cd Assignment_for_6700
 docker compose up -d --build
 ```
 
-This builds the app image, starts the `llm` container (llama.cpp), and starts `app`
-once `llm` is healthy. The first time, it also downloads the model (1.1 GB) into the
-`llm-models` volume.
+The first run downloads the model (1.1 GB), so it takes a bit longer. Config is in
+`.env.production.example`. If you want to change something, put it in a `.env` file.
 
-Settings come from `.env.production.example`. To change something, put it in a `.env`
-file in the same folder. `.env` is gitignored and overrides the example.
-
-Check that both containers say `healthy` (about 40 s the first time):
+Wait until both containers show `healthy`:
 
 ```bash
 docker compose ps
 ```
 
-### 3. Try the endpoints
+### 3. Test the endpoints
 
-Use `localhost` on the instance, or the instance's public IP from your own computer
-(ours is `149.165.150.147`):
+On the instance use localhost. From your laptop use the instance IP instead (ours is
+`149.165.150.147`).
 
 ```bash
 HOST=http://localhost:8000
 ```
 
-Health check:
+`/health`:
 
 ```bash
 curl $HOST/health
 ```
 
+Should return:
+
 ```json
 {"status":"ok","version":"0.1.0"}
 ```
 
-Ready check (returns 503 if the model server isn't up yet):
+`/ready` (gives 503 if the model server isn't up yet):
 
 ```bash
 curl $HOST/ready
 ```
 
+Should return:
+
 ```json
 {"status":"ready"}
 ```
 
-Predict a digit. `pixels` is an 8×8 image flattened to 64 numbers from 0 to 16, and
-this one is a 0 from the scikit-learn digits dataset. It takes about 1 second because
-we kept the `time.sleep(1)` from the blocking-call audit (see
-[discussion.md](discussion.md)):
+`/predict` takes the 64 pixel values (0-16) of an 8x8 image. This one is a 0. It takes
+about 1 s because of the `time.sleep(1)` we kept from the audit
+([discussion.md](discussion.md)).
 
 ```bash
 curl -X POST $HOST/predict \
@@ -162,11 +159,13 @@ curl -X POST $HOST/predict \
   -d '{"pixels":[0,0,5,13,9,1,0,0,0,0,13,15,10,15,5,0,0,3,15,2,0,11,8,0,0,4,12,0,0,8,8,0,0,5,8,0,0,9,8,0,0,4,11,0,1,12,7,0,0,2,14,5,10,12,0,0,0,0,6,13,10,0,0,0]}'
 ```
 
+Should return:
+
 ```json
 {"digit":0}
 ```
 
-Generate text with the language model (answers are limited to 128 tokens):
+`/generate`:
 
 ```bash
 curl -X POST $HOST/generate \
@@ -174,11 +173,13 @@ curl -X POST $HOST/generate \
   -d '{"prompt": "In one sentence, what is OPT for F-1 students?"}'
 ```
 
+Should return:
+
 ```json
 {"completion":"OPT stands for Optional Practical Training, which allows F-1 students to gain practical work experience in their field of study."}
 ```
 
-Wrong input gives a 422:
+Bad input returns 422:
 
 ```bash
 curl -i -X POST $HOST/predict \
@@ -186,31 +187,29 @@ curl -i -X POST $HOST/predict \
   -d '{"pixels":[1,2,3]}'
 ```
 
-You can also open `$HOST/docs` in a browser to try the endpoints.
+Swagger docs are at `$HOST/docs`.
 
-### 4. Logs, stop, restart
+### 4. Other commands
 
 ```bash
-docker compose logs -f app   # app logs
-docker compose down          # stop (the downloaded model is kept)
-docker compose up -d         # start again
+docker compose logs -f app
+docker compose down
+docker compose up -d
 ```
 
-Both containers have `restart: unless-stopped`, so they come back by themselves after
-a reboot or an unshelve.
+`down` keeps the downloaded model. The containers restart by themselves after a reboot
+or unshelve (`restart: unless-stopped`).
 
-### 5. Switching the model server
+### 5. Using a different model server
 
-The app finds the model server through `LLM_BASE_URL` and `LLM_MODEL`. For example,
-to use the class model server instead, put this in `.env` and run
-`docker compose up -d`:
+Set `LLM_BASE_URL` and `LLM_MODEL` in `.env`. For example, for the class server:
 
 ```bash
 LLM_BASE_URL=http://10.1.82.181:8000/v1
 LLM_MODEL=Qwen/Qwen2.5-14B-Instruct-AWQ
 ```
 
-See [docs/model-serving.md](docs/model-serving.md) for why we set it up this way.
+Then run `docker compose up -d` again. See [docs/model-serving.md](docs/model-serving.md).
 
 ## Docker
 
@@ -244,8 +243,8 @@ Expected response:
 See [Docker setup](docs/docker.md) for container health checks,
 cleanup commands, image size, and rebuild measurements.
 
-This only runs the app container. `/generate` and `/ready` also need the model server,
-so use [Compose](#deploy-with-compose) to run everything.
+Note: this only starts the app. `/generate` and `/ready` need the model server too, so
+use [Compose](#deploy-with-compose) for the full thing.
 
 ## How-to guides
 
@@ -262,9 +261,8 @@ evaluates it on a held-out 20% test split, and saves `models/digits.joblib`.
 The split uses a fixed random seed for reproducibility. No dataset download or
 GPU is needed. The model takes 64 pixel values (0–16) and predicts a digit (0–9).
 
-The app loads this file once when it starts and uses it for `POST /predict`. Training
-is not part of startup. `models/digits.joblib` is committed and copied into the Docker
-image.
+The app loads this file at startup for `/predict`. The file is committed and gets
+copied into the Docker image.
 
 ### Measure concurrent prediction requests
 
@@ -394,10 +392,9 @@ anywhere.
 | `LLM_DEVICE` | `cpu` | `cpu`, `cuda` or `auto`; read by the model server. |
 | `LLM_CACHE_DIR` | `/models` | Where the model server keeps weights (a mounted volume). |
 
-These are the defaults in the code. With Compose, `compose.yml` and
-`.env.production.example` set them for the llama.cpp container instead:
-`LLM_PROVIDER=openai`, `LLM_BASE_URL=http://llm:8080/v1`,
-`LLM_MODEL=qwen2.5-1.5b-instruct` and `LLM_MAX_TOKENS=128`.
+Those are the code defaults. Under Compose they're set for the llama.cpp container
+(`LLM_PROVIDER=openai`, `LLM_BASE_URL=http://llm:8080/v1`,
+`LLM_MODEL=qwen2.5-1.5b-instruct`, `LLM_MAX_TOKENS=128`).
 
 Model failures reach clients as `504` (timeout), `503` (server unreachable or
 erroring) or `502` (malformed reply). See
@@ -457,16 +454,15 @@ With the default `LLM_PROVIDER=echo` the completion is the prompt itself, which
 confirms the wiring without a model server. Model failures return `504`, `503` or
 `502` as described under [Configuration](#configuration).
 
-`POST /predict` takes a `PredictRequest` and returns a `PredictResponse`. The model is
-loaded at startup, and each prediction runs in a worker thread, so the 1 second delay
-doesn't block other requests.
+`POST /predict` takes a `PredictRequest` and returns a `PredictResponse`. The
+prediction runs in a worker thread so the 1 s delay doesn't block other requests.
 
 | Model | Field | Type | Validation or example |
 | --- | --- | --- | --- |
 | `PredictRequest` | `pixels` | `list[int]` | Exactly 64 integers from 0 to 16, row by row from an 8×8 image, otherwise `422` |
 | `PredictResponse` | `digit` | `int` | 0 to 9, e.g. `0` |
 
-There's a full curl example under [Deploy with Compose](#3-try-the-endpoints).
+Example curl is in [Deploy with Compose](#3-test-the-endpoints).
 
 ### Project layout
 
@@ -536,9 +532,9 @@ A failure at any step fails the run. See results under the repository's
   dependencies and tool settings; no `setup.py`.
 - **uv.lock.** A committed lockfile makes installs reproducible across laptops, CI
   and the Docker image on our Jetstream2 instance.
-- **Language model in its own container.** The app image only has the small digits
-  model (91 KB). The 1.1 GB language model lives in a volume used by the llama.cpp
-  container, so we can change the model with env vars instead of rebuilding.
+- **Language model in its own container.** The weights (1.1 GB) stay in a volume
+  instead of the app image, and we can switch models with env vars without
+  rebuilding.
 - **Quality gates in two places.** pre-commit stops problems before they are
   committed; CI enforces the same checks for everyone, so the main branch stays
   green.
@@ -551,6 +547,5 @@ A failure at any step fails the run. See results under the repository's
   `pyproject.toml` without committing `uv.lock`. Run `uv lock`, then commit
   `uv.lock`.
 - **Port 8000 already in use**: add `--port 8001` to the run command.
-- **`/ready` or `/generate` returns 503**: the model server isn't ready yet. Run
-  `docker compose ps` and wait until `llm` is `healthy` (the first start has to
-  download the model).
+- **`/ready` or `/generate` gives 503**: the model server isn't ready yet. Check
+  `docker compose ps` (the first start has to download the model).

@@ -1,7 +1,7 @@
 # Deployment on Jetstream2
 
-How the service runs on our team instance, how to start and check it, and what to
-do when something breaks. The stack is defined in [`compose.yml`](../compose.yml).
+Notes on running the stack on our team instance (TEAM02). The stack is defined in
+[`compose.yml`](../compose.yml).
 
 ## What runs where
 
@@ -17,27 +17,26 @@ TEAM02 (Jetstream2 m3.small: 2 vCPUs, 6 GB RAM, 20 GB disk)
           weights in the named volume llm-models
 ```
 
-- The digits model is a 91 KB file (`models/digits.joblib`) that ships inside the
-  app image, so `/predict` works even when the LLM is down.
-- The LLM runs in its own container so the app image stays small and the model can
-  be swapped through env vars. `/generate` returns 503 and `/ready` returns 503
-  while it is unavailable; `/health` stays 200.
-- We use llama.cpp rather than Ollama because the Ollama image (3.78 GB) does not
-  fit next to a model on the 20 GB disk. The llama.cpp image is 309 MB.
+- The digits model (`models/digits.joblib`, 91 KB) is inside the app image, so
+  `/predict` still works if the LLM is down.
+- The LLM has its own container. If it's down, `/generate` and `/ready` give 503 but
+  `/health` stays 200.
+- We used llama.cpp instead of Ollama because the Ollama image (3.78 GB) didn't fit
+  on the 20 GB disk next to the model. The llama.cpp image is 309 MB.
 
 ## Start the stack
 
-1. In [Exosphere](https://jetstream2.exosphere.app), open TEAM02. If it is shelved,
-   choose **Actions → Unshelve** and wait for **Ready**.
-2. Copy the **public IP** from the instance page. We keep it when shelving, so it
-   stays `149.165.150.147`; if it ever differs, use the one shown there.
-3. From your laptop (your SSH key must be in the instance's `authorized_keys`):
+1. In [Exosphere](https://jetstream2.exosphere.app), open TEAM02. If it's shelved, do
+   **Actions → Unshelve** and wait for **Ready**.
+2. Get the public IP from the instance page. We keep the IP when shelving, so it should
+   be `149.165.150.147`.
+3. SSH in (your key has to be in the instance's `authorized_keys`):
 
    ```bash
    ssh exouser@<public-ip>
    ```
 
-4. On the instance, from a fresh clone:
+4. On the instance:
 
    ```bash
    git clone https://github.com/RAkupper/Assignment_for_6700.git
@@ -46,8 +45,8 @@ TEAM02 (Jetstream2 m3.small: 2 vCPUs, 6 GB RAM, 20 GB disk)
    docker compose ps
    ```
 
-The first start downloads the model weights (1.1 GB) into the `llm-models`
-volume; later starts reuse them. `app` starts once `llm` reports healthy.
+The first start downloads the model (1.1 GB) into the `llm-models` volume. After that
+it's reused. `app` waits until `llm` is healthy.
 
 ## Check it from your laptop
 
@@ -62,34 +61,34 @@ curl -X POST http://<public-ip>:8000/predict \
   -d '{"pixels":[0,0,7,15,13,1,0,0,0,8,13,6,15,4,0,0,0,2,1,13,13,0,0,0,0,0,2,15,11,1,0,0,0,0,0,1,12,12,1,0,0,0,0,0,1,10,8,0,0,0,8,4,5,14,9,0,0,0,7,13,13,9,0,0]}'
 ```
 
-The `/predict` example is a handwritten 3 from scikit-learn's digits dataset, so
-the answer should be `{"digit":3}`.
+The `/predict` example is a 3 from the scikit-learn digits dataset, so it should
+return `{"digit":3}`.
 
 ## Everyday commands (on the instance, in `~/Assignment_for_6700`)
 
 | Task | Command |
 | --- | --- |
-| Status and health | `docker compose ps` |
-| Follow the logs | `docker compose logs -f app` (or `llm`) |
-| Pull new code and rebuild the app | `git pull && docker compose up -d --build` |
-| Stop the stack (keeps the model volume) | `docker compose down` |
+| Status | `docker compose ps` |
+| Logs | `docker compose logs -f app` (or `llm`) |
+| Pull new code and rebuild | `git pull && docker compose up -d --build` |
+| Stop (keeps the model) | `docker compose down` |
 | Disk usage | `docker system df` and `df -h /` |
 
-Shelve TEAM02 in Exosphere when you are done, and say so in the group chat first so
-you don't cut off someone who is testing. Both containers use
-`restart: unless-stopped`, so they come back on their own after an unshelve.
+Shelve TEAM02 in Exosphere when you're done, but say so in the group chat first in
+case someone is testing. Both containers have `restart: unless-stopped`, so they start
+again by themselves after an unshelve.
 
 ## Configuration
 
-Compose passes config to the app at run time; nothing is baked into the image.
+Config is passed in when the containers start, nothing is baked into the image.
 
-- Defaults come from `.env.production.example` (no secrets, committed).
-- Put overrides in an untracked `.env` next to `compose.yml`; its values win.
-- `LLM_MAX_TOKENS` defaults to 128. On 2 vCPUs the model generates about 25 tokens/s,
-  so long answers under concurrent load would exceed the 120 s client timeout.
+- Defaults are in `.env.production.example` (committed, no secrets).
+- Put changes in a `.env` next to `compose.yml`, it overrides the example.
+- `LLM_MAX_TOKENS` is 128. The model does about 25 tokens/s on 2 vCPUs, so longer
+  answers with several requests at once would hit the 120 s timeout.
 
-To use the class model server (Qwen 14B on a GPU, only up when the instructors run it)
-instead of the local llm container, put this in `.env` and run `docker compose up -d`:
+To use the class model server instead (Qwen 14B on a GPU, only up when the instructors
+run it), put this in `.env` and run `docker compose up -d`:
 
 ```bash
 LLM_BASE_URL=http://10.1.82.181:8000/v1
@@ -98,43 +97,42 @@ LLM_MODEL=Qwen/Qwen2.5-14B-Instruct-AWQ
 
 ## Troubleshooting
 
-| Symptom | Likely cause and fix |
+| Problem | What to do |
 | --- | --- |
-| `ssh` times out | TEAM02 is shelved, or the IP changed after an unshelve. Check Exosphere. |
-| `ssh` says the host key changed | You are using an old IP that now belongs to another machine. Get the current IP from Exosphere. |
-| `/generate` or `/ready` returns 503 | The llm container is not ready. Check `docker compose ps` and `docker compose logs llm`. |
-| `app` keeps restarting | Usually a config error at startup. `docker compose logs app` shows which setting failed validation, e.g. a missing `models/digits.joblib`. |
-| Build fails with "no space left on device" | Check `df -h /`; remove old images with `docker image prune`. Do not delete the `llm-models` volume unless you want to download the model again. |
+| `ssh` times out | TEAM02 is probably shelved. Check Exosphere. |
+| `ssh` says the host key changed | You're using an old IP that now belongs to another machine. Get the current IP from Exosphere. |
+| `/generate` or `/ready` gives 503 | The llm container isn't ready. Check `docker compose ps` and `docker compose logs llm`. |
+| `app` keeps restarting | Probably a config error. `docker compose logs app` shows which setting failed, e.g. a missing `models/digits.joblib`. |
+| Build fails with "no space left on device" | Check `df -h /` and remove old images with `docker image prune`. Don't delete the `llm-models` volume unless you want to download the model again. |
 
 ## Measured on TEAM02
 
-These are from the final `main` on TEAM02 (m3.small: 2 vCPUs, 6 GB RAM, 20 GB disk).
+From the final `main` on TEAM02 (m3.small, 2 vCPUs, 6 GB RAM, 20 GB disk):
 
-- Fresh clone + `docker compose up -d --build`: both containers healthy after 37 s,
-  including building the image with scikit-learn. Before scikit-learn was added it
-  took 14 s, and 13 s when the model also had to be downloaded.
+- Fresh clone + `docker compose up -d --build`: both containers healthy after 37 s
+  (14 s before scikit-learn was added).
 - Calls from a laptop:
 
   | Request | Result |
   | --- | --- |
   | `GET /health` | 200, `{"status":"ok","version":"0.1.0"}`, 0.06 s |
   | `GET /ready` | 200, `{"status":"ready"}` |
-  | `POST /predict` (a "0" from the digits dataset) | 200, `{"digit":0}`, 1.08 s (1 s is the audit delay) |
+  | `POST /predict` (a 0 from the digits dataset) | 200, `{"digit":0}`, 1.08 s (1 s is the audit delay) |
   | `POST /predict` with 3 pixels | 422 |
-  | `POST /generate` | 200, a correct one-sentence answer about OPT, 1.7 s |
+  | `POST /generate` | 200, correct one-sentence answer about OPT, 1.7 s |
   | `POST /generate` with a blank prompt | 422 |
   | port 8080 (model server) | not reachable from outside |
 
-- Shelve and unshelve (tested Oct 20 and Oct 21): both containers started again by
-  themselves (`restart: unless-stopped`) and `/health` worked from outside before we
-  logged in. The IP didn't change because we keep it when shelving.
-- llm container: healthy 6 s after starting when the model is already downloaded, and
-  8 s after restarting Docker.
-- Speed: about 25 tokens/s for one request. 10 requests at the same time (up to 64
-  tokens each) took 23 s in total, the slowest one 22.9 s.
-- App image: 472 MB. Rebuild after changing one line: 13.1 s with cache, 15.6 s
-  without (see [docker.md](docker.md#build-measurements)).
-- `docker system df` with the stack running, after `docker builder prune`:
+- Shelve/unshelve (Oct 20 and Oct 21): the containers came back by themselves and
+  `/health` worked from outside right away. The IP stayed the same since we keep it
+  when shelving.
+- llm container: healthy in 6 s when the model is already downloaded, 8 s after a
+  Docker restart.
+- Speed: ~25 tokens/s for one request. 10 requests at once (64 tokens each) took 23 s,
+  slowest 22.9 s.
+- App image 472 MB. Rebuild after a one-line change: 13.1 s cached, 15.6 s without
+  cache (see [docker.md](docker.md#build-measurements)).
+- `docker system df` (stack running, after `docker builder prune`):
 
   ```text
   TYPE            TOTAL     ACTIVE    SIZE      RECLAIMABLE
@@ -144,4 +142,4 @@ These are from the final `main` on TEAM02 (m3.small: 2 vCPUs, 6 GB RAM, 20 GB di
   Build Cache     0         0         0B        0B
   ```
 
-  3 of the 5 images are Exosphere's web shell (Guacamole). 3.4 GB of disk is left.
+  3 of the 5 images are Exosphere's web shell. 3.4 GB of disk left.
