@@ -1,0 +1,32 @@
+# Exclude environment files and credentials
+.env
+.env.*
+**/.env
+**/.env.*
+*.pem
+*.key
+
+# Exclude local editor and build files
+.vscode
+.idea
+build
+dist
+*.egg-info
+.coverage
+htmlcov
+
+# Exclude Git history
+.git
+**/.git
+
+# Exclude the accidentally nested clone
+Assignment_for_6700/
+
+# Exclude virtual environments and Python caches
+.venv
+**/.venv
+**/__pycache__
+**/*.py[cod]
+.pytest_cache
+.mypy_cache
+.ruff_cache

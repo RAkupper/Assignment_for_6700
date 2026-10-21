@@ -1,0 +1,94 @@
+#0 building with "default" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 1.06kB 0.0s done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/python:3.13-slim-bookworm
+#2 DONE 0.1s
+
+#3 [internal] load metadata for ghcr.io/astral-sh/uv:0.12.18
+#3 DONE 0.2s
+
+#4 [internal] load .dockerignore
+#4 transferring context: 450B 0.0s done
+#4 DONE 0.0s
+
+#5 FROM ghcr.io/astral-sh/uv:0.12.18@sha256:3adc3706091ce7c2fe595e669628caedd6d951551b92b258b7e7dbe06d9440bc
+#5 resolve ghcr.io/astral-sh/uv:0.12.18@sha256:3adc3706091ce7c2fe595e669628caedd6d951551b92b258b7e7dbe06d9440bc 0.0s done
+#5 CACHED
+
+#6 [builder 1/8] FROM docker.io/library/python:3.13-slim-bookworm@sha256:a1165e272e578941b84abc79e4ab38a0305cd12803a5c4247979ac7655f4d641
+#6 resolve docker.io/library/python:3.13-slim-bookworm@sha256:a1165e272e578941b84abc79e4ab38a0305cd12803a5c4247979ac7655f4d641 0.0s done
+#6 CACHED
+
+#7 [runtime 2/4] WORKDIR /app
+#7 CACHED
+
+#8 [internal] load build context
+#8 transferring context: 383B 0.0s done
+#8 DONE 0.0s
+
+#9 [builder 2/8] COPY --from=ghcr.io/astral-sh/uv:0.12.18 /uv /usr/local/bin/uv
+#9 DONE 0.1s
+
+#10 [builder 3/8] WORKDIR /app
+#10 DONE 0.0s
+
+#11 [builder 4/8] COPY pyproject.toml uv.lock ./
+#11 DONE 0.0s
+
+#12 [runtime 3/4] RUN useradd --create-home --uid 10001 appuser
+#12 DONE 0.2s
+
+#13 [builder 5/8] RUN uv sync --frozen --no-dev --no-install-project
+#13 0.299 Using CPython 3.13.16 interpreter at: /usr/local/bin/python3
+#13 0.299 Creating virtual environment at: .venv
+#13 0.385 Downloading pydantic-core (2.0MiB)
+#13 0.570  Downloaded pydantic-core
+#13 0.570 Prepared 15 packages in 268ms
+#13 0.577 Installed 15 packages in 6ms
+#13 0.577  + annotated-doc==0.0.5
+#13 0.577  + annotated-types==0.8.0
+#13 0.577  + anyio==4.15.1
+#13 0.577  + click==8.5.0
+#13 0.577  + fastapi==0.141.1
+#13 0.577  + h11==0.16.0
+#13 0.577  + idna==3.19
+#13 0.577  + pydantic==2.13.5
+#13 0.577  + pydantic-core==2.46.5
+#13 0.577  + pydantic-settings==2.15.0
+#13 0.577  + python-dotenv==1.2.3
+#13 0.577  + starlette==1.6.0
+#13 0.577  + typing-extensions==4.16.0
+#13 0.577  + typing-inspection==0.4.4
+#13 0.577  + uvicorn==0.53.0
+#13 DONE 0.6s
+
+#14 [builder 6/8] COPY README.md ./
+#14 DONE 0.0s
+
+#15 [builder 7/8] COPY src/ ./src/
+#15 DONE 0.1s
+
+#16 [builder 8/8] RUN uv sync --frozen --no-dev --no-editable
+#16 0.301    Building assignment-1 @ file:///app
+#16 0.762       Built assignment-1 @ file:///app
+#16 0.764 Prepared 1 package in 464ms
+#16 0.765 Installed 1 package in 0.89ms
+#16 0.765  + assignment-1==0.1.0 (from file:///app)
+#16 DONE 0.8s
+
+#17 [runtime 4/4] COPY --from=builder /app/.venv /app/.venv
+#17 DONE 0.1s
+
+#18 exporting to image
+#18 exporting layers
+#18 exporting layers 0.3s done
+#18 exporting manifest sha256:71ccebcb50058a283a1668ab2f6147d92da99bae6a73e329670da4b638097f70 done
+#18 exporting config sha256:6b0a7e527fec390b69c39fc5aa69953f72702d4fcce3c2277c88185556a563d8 done
+#18 exporting attestation manifest sha256:14646613fcaa48300706d574c86d43ea42ca5ad8e25bfa90886078b949446b4c done
+#18 exporting manifest list sha256:4de8edfccdaca59b9fefbdacc1da74f3d3a55727dcf40bf736c52cfe1c977ba5 done
+#18 naming to docker.io/library/immigration-app:benchmark done
+#18 unpacking to docker.io/library/immigration-app:benchmark 0.1s done
+#18 DONE 0.4s

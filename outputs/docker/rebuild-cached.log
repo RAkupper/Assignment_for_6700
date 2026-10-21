@@ -1,0 +1,73 @@
+#0 building with "default" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 1.06kB 0.0s done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for ghcr.io/astral-sh/uv:0.12.18
+#2 DONE 0.3s
+
+#3 [internal] load metadata for docker.io/library/python:3.13-slim-bookworm
+#3 DONE 0.3s
+
+#4 [internal] load .dockerignore
+#4 transferring context: 450B 0.0s done
+#4 DONE 0.0s
+
+#5 FROM ghcr.io/astral-sh/uv:0.12.18@sha256:3adc3706091ce7c2fe595e669628caedd6d951551b92b258b7e7dbe06d9440bc
+#5 resolve ghcr.io/astral-sh/uv:0.12.18@sha256:3adc3706091ce7c2fe595e669628caedd6d951551b92b258b7e7dbe06d9440bc 0.0s done
+#5 DONE 0.0s
+
+#6 [builder 1/8] FROM docker.io/library/python:3.13-slim-bookworm@sha256:a1165e272e578941b84abc79e4ab38a0305cd12803a5c4247979ac7655f4d641
+#6 resolve docker.io/library/python:3.13-slim-bookworm@sha256:a1165e272e578941b84abc79e4ab38a0305cd12803a5c4247979ac7655f4d641 0.0s done
+#6 DONE 0.0s
+
+#7 [internal] load build context
+#7 transferring context: 1.23kB 0.0s done
+#7 DONE 0.0s
+
+#8 [builder 4/8] COPY pyproject.toml uv.lock ./
+#8 CACHED
+
+#9 [builder 3/8] WORKDIR /app
+#9 CACHED
+
+#10 [builder 2/8] COPY --from=ghcr.io/astral-sh/uv:0.12.18 /uv /usr/local/bin/uv
+#10 CACHED
+
+#11 [builder 5/8] RUN uv sync --frozen --no-dev --no-install-project
+#11 CACHED
+
+#12 [builder 6/8] COPY README.md ./
+#12 CACHED
+
+#13 [builder 7/8] COPY src/ ./src/
+#13 DONE 0.0s
+
+#14 [builder 8/8] RUN uv sync --frozen --no-dev --no-editable
+#14 0.342    Building assignment-1 @ file:///app
+#14 0.927       Built assignment-1 @ file:///app
+#14 0.929 Prepared 1 package in 589ms
+#14 0.930 Installed 1 package in 0.95ms
+#14 0.930  + assignment-1==0.1.0 (from file:///app)
+#14 DONE 0.9s
+
+#15 [runtime 2/4] WORKDIR /app
+#15 CACHED
+
+#16 [runtime 3/4] RUN useradd --create-home --uid 10001 appuser
+#16 CACHED
+
+#17 [runtime 4/4] COPY --from=builder /app/.venv /app/.venv
+#17 DONE 0.0s
+
+#18 exporting to image
+#18 exporting layers
+#18 exporting layers 0.2s done
+#18 exporting manifest sha256:df810b1222c5c99c7053a423e8d2e8908299add9e11169a0864c292eef9b8b9d done
+#18 exporting config sha256:8327ef92de7223ef9acfab73a4d5cba0f46eb404bdb62ebdea58ff3082d511d1 done
+#18 exporting attestation manifest sha256:48255b7b1476b4ec55da0f743ad7cb93c186bdb3bcecf9e1e7619b6139724c94 done
+#18 exporting manifest list sha256:d24397b8508154453a151041ffff6f98847a077445864fb1ea84ed4c2a4235fb done
+#18 naming to docker.io/library/immigration-app:benchmark done
+#18 unpacking to docker.io/library/immigration-app:benchmark 0.1s done
+#18 DONE 0.4s
