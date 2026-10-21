@@ -8,7 +8,8 @@ from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
 
 from assignment_1 import app as app_module
-from assignment_1.app import app, get_model_client, settings
+from assignment_1.app import app, get_model_client
+from assignment_1.config import ModelSettings, Settings
 from assignment_1.model_client import ModelClient, build_model_client
 from tests.fakes import FakeModelClient
 
@@ -68,8 +69,10 @@ def test_fake_model_client_simulates_slow_inference() -> None:
     assert time.perf_counter() - start >= 0.05
 
 
-def test_default_client_satisfies_protocol() -> None:
-    """The client built from settings implements ModelClient."""
-    client = build_model_client(settings)
+def test_default_client_satisfies_protocol(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The default client implements ModelClient, whatever the local .env sets."""
+    monkeypatch.delenv("LLM_PROVIDER", raising=False)
+    defaults = Settings(_env_file=None, llm=ModelSettings(_env_file=None))
+    client = build_model_client(defaults)
     assert isinstance(client, ModelClient)
     assert client.generate("echo me") == "echo me"

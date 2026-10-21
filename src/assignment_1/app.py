@@ -1,12 +1,13 @@
 """FastAPI application: service instance, response models and routes."""
 
+import asyncio
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import Literal
+from typing import Annotated, Literal
 
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 
 from assignment_1.config import Settings
 from assignment_1.model_client import (
@@ -83,3 +84,35 @@ def health() -> HealthResponse:
         HealthResponse: an ok status and the running service version.
     """
     return HealthResponse(status="ok", version=app.version)
+
+
+class GenerateRequest(BaseModel):
+    """Prompt sent to the model."""
+
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    prompt: str = Field(min_length=1, max_length=4000)  # about 1k tokens
+
+
+class GenerateResponse(BaseModel):
+    """Text the model returned for a prompt."""
+
+    completion: str
+
+
+@app.post("/generate", response_model=GenerateResponse)
+async def generate(
+    body: GenerateRequest,
+    model: Annotated[ModelClient, Depends(get_model_client)],
+) -> GenerateResponse:
+    """Return the model's completion for a prompt.
+
+    The client call is synchronous, so it runs in a worker thread and the event
+    loop keeps answering other requests, such as ``/health``, while the model works.
+    Model failures become 504, 503 or 502 through ``model_error_handler``.
+
+    Returns:
+        GenerateResponse: the completion text.
+    """
+    completion = await asyncio.to_thread(model.generate, body.prompt)
+    return GenerateResponse(completion=completion)
