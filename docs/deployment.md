@@ -108,6 +108,41 @@ LLM_MODEL=Qwen/Qwen2.5-14B-Instruct-AWQ
 
 ## Measured on TEAM02
 
+### Final main (Oct 21)
+
+- Fresh clone + `docker compose up -d --build`: both containers healthy after 37 s
+  (this includes installing scikit-learn into the image).
+- Calls from a laptop:
+
+  | Request | Result |
+  | --- | --- |
+  | `GET /health` | 200, `{"status":"ok","version":"0.1.0"}`, 0.06 s |
+  | `GET /ready` | 200, `{"status":"ready"}` |
+  | `POST /predict` (a 0 from the digits dataset) | 200, `{"digit":0}`, 1.08 s (1 s is the audit delay) |
+  | `POST /predict` with 3 pixels | 422 |
+  | `POST /generate` | 200, correct one-sentence answer about OPT, 1.7 s |
+  | `POST /generate` with a blank prompt | 422 |
+  | port 8080 (model server) | not reachable from outside |
+
+- Shelve/unshelve checked again: the containers came back by themselves and `/health`
+  worked from outside right away. The IP stayed the same since we keep it when
+  shelving.
+- App image 472 MB. Rebuild after a one-line change: 13.1 s cached, 15.6 s without
+  cache (see [docker.md](docker.md#build-measurements)).
+- `docker system df` (stack running, after `docker builder prune`):
+
+  ```text
+  TYPE            TOTAL     ACTIVE    SIZE      RECLAIMABLE
+  Images          5         5         2.944GB   2.944GB (100%)
+  Containers      5         4         27.12MB   12.29kB (0%)
+  Local Volumes   1         1         1.117GB   0B (0%)
+  Build Cache     0         0         0B        0B
+  ```
+
+  3.4 GB of disk left.
+
+### Before scikit-learn (Oct 20)
+
 - llm container: healthy 6 s after start with the weights already in the volume, and
   again 8 s after a Docker restart.
 - Generation: about 25 tokens/s for one request; 10 concurrent requests of up to 64

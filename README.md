@@ -3,9 +3,14 @@
 An installable FastAPI service skeleton for our course ML inference API. This week it
 exposes a typed `/health` endpoint; later assignments will put a model behind it.
 
+Update for HW2: it now has two models, a scikit-learn digit classifier inside the app
+(`/predict`) and Qwen2.5-1.5B-Instruct running in a llama.cpp container
+(`/generate`). We deploy it on Jetstream2 with `docker compose up -d`.
+
 ## Contents
 
 - [Quickstart](#quickstart) (tutorial: clean machine to running service)
+- [Deploy with Compose](#deploy-with-compose) (run everything on an instance)
 - [Docker](#docker) (build, run, and check the container)
 - [How-to guides](#how-to-guides) (tests, linting, pre-commit, adding dependencies)
 - [Reference](#reference) (endpoints, project layout, CI pipeline)
@@ -80,6 +85,134 @@ Expected response:
 Interactive API docs are at <http://127.0.0.1:8000/docs>. Press `Ctrl+C` to stop the
 server.
 
+## Deploy with Compose
+
+This is how we run it on our Jetstream2 instance (TEAM02). It should work on any Linux
+machine with Docker. More notes in [docs/deployment.md](docs/deployment.md).
+
+### 1. Requirements
+
+- Docker and Docker Compose 2.24 or newer:
+
+  ```bash
+  docker compose version
+  ```
+
+- Port 8000 open (Exosphere instances already have this)
+- About 4 GB of free disk
+
+### 2. Start it
+
+```bash
+git clone https://github.com/RAkupper/Assignment_for_6700.git
+cd Assignment_for_6700
+docker compose up -d --build
+```
+
+The first run downloads the model (1.1 GB), so it takes a bit longer. Config is in
+`.env.production.example`. If you want to change something, put it in a `.env` file.
+
+Wait until both containers show `healthy`:
+
+```bash
+docker compose ps
+```
+
+### 3. Test the endpoints
+
+On the instance use localhost. From your laptop use the instance IP instead (ours is
+`149.165.150.147`).
+
+```bash
+HOST=http://localhost:8000
+```
+
+`/health`:
+
+```bash
+curl $HOST/health
+```
+
+Should return:
+
+```json
+{"status":"ok","version":"0.1.0"}
+```
+
+`/ready` (gives 503 if the model server isn't up yet):
+
+```bash
+curl $HOST/ready
+```
+
+Should return:
+
+```json
+{"status":"ready"}
+```
+
+`/predict` takes the 64 pixel values (0-16) of an 8x8 image. This one is a 0. It takes
+about 1 s because of the `time.sleep(1)` we kept from the audit
+([discussion.md](discussion.md)).
+
+```bash
+curl -X POST $HOST/predict \
+  -H "Content-Type: application/json" \
+  -d '{"pixels":[0,0,5,13,9,1,0,0,0,0,13,15,10,15,5,0,0,3,15,2,0,11,8,0,0,4,12,0,0,8,8,0,0,5,8,0,0,9,8,0,0,4,11,0,1,12,7,0,0,2,14,5,10,12,0,0,0,0,6,13,10,0,0,0]}'
+```
+
+Should return:
+
+```json
+{"digit":0}
+```
+
+`/generate`:
+
+```bash
+curl -X POST $HOST/generate \
+  -H "Content-Type: application/json" \
+  -d '{"prompt": "In one sentence, what is OPT for F-1 students?"}'
+```
+
+Should return:
+
+```json
+{"completion":"OPT stands for Optional Practical Training, which allows F-1 students to gain practical work experience in their field of study."}
+```
+
+Bad input returns 422:
+
+```bash
+curl -i -X POST $HOST/predict \
+  -H "Content-Type: application/json" \
+  -d '{"pixels":[1,2,3]}'
+```
+
+Swagger docs are at `$HOST/docs`.
+
+### 4. Other commands
+
+```bash
+docker compose logs -f app
+docker compose down
+docker compose up -d
+```
+
+`down` keeps the downloaded model. The containers restart by themselves after a reboot
+or unshelve (`restart: unless-stopped`).
+
+### 5. Using a different model server
+
+Set `LLM_BASE_URL` and `LLM_MODEL` in `.env`. For example, for the class server:
+
+```bash
+LLM_BASE_URL=http://10.1.82.181:8000/v1
+LLM_MODEL=Qwen/Qwen2.5-14B-Instruct-AWQ
+```
+
+Then run `docker compose up -d` again. See [docs/model-serving.md](docs/model-serving.md).
+
 ## Docker
 
 Build the application image:
@@ -111,6 +244,9 @@ Expected response:
 
 See [Docker setup](docs/docker.md) for container health checks,
 cleanup commands, image size, and rebuild measurements.
+
+Note: this only starts the app. `/generate` and `/ready` need the model server too, so
+use [Compose](#deploy-with-compose) for the full thing.
 
 ## How-to guides
 
@@ -259,6 +395,10 @@ anywhere.
 | `LLM_DEVICE` | `cpu` | `cpu`, `cuda` or `auto`; read by the model server. |
 | `LLM_CACHE_DIR` | `/models` | Where the model server keeps weights (a mounted volume). |
 
+Those are the code defaults. Under Compose they're set for the llama.cpp container
+(`LLM_PROVIDER=openai`, `LLM_BASE_URL=http://llm:8080/v1`,
+`LLM_MODEL=qwen2.5-1.5b-instruct`, `LLM_MAX_TOKENS=128`).
+
 Model failures reach clients as `504` (timeout), `503` (server unreachable or
 erroring) or `502` (malformed reply). See
 [docs/model-serving.md](docs/model-serving.md) for where the model runs and why.
@@ -317,6 +457,16 @@ With the default `LLM_PROVIDER=echo` the completion is the prompt itself, which
 confirms the wiring without a model server. Model failures return `504`, `503` or
 `502` as described under [Configuration](#configuration).
 
+`POST /predict` takes a `PredictRequest` and returns a `PredictResponse`. The
+prediction runs in a worker thread so the 1 s delay doesn't block other requests.
+
+| Model | Field | Type | Validation or example |
+| --- | --- | --- | --- |
+| `PredictRequest` | `pixels` | `list[int]` | Exactly 64 integers from 0 to 16, row by row from an 8×8 image, otherwise `422` |
+| `PredictResponse` | `digit` | `int` | 0 to 9, e.g. `0` |
+
+Example curl is in [Deploy with Compose](#3-test-the-endpoints).
+
 ### Project layout
 
 ```text
@@ -326,23 +476,36 @@ Assignment_for_6700/
 │   └── workflows/ci.yml       # GitHub Actions quality gates
 ├── .env.local.example         # local development settings
 ├── .env.production.example    # deployed settings
+├── .dockerignore              # keeps env files, .venv and .git out of the image
 ├── .pre-commit-config.yaml    # Git hooks (ruff, hygiene checks)
 ├── .python-version            # Python 3.13, read by uv and CI
+├── Dockerfile                 # app image: uv sync --frozen, non-root, HEALTHCHECK
+├── compose.yml                # app + llama.cpp model server, named volume, restarts
+├── discussion.md              # blocking-call audit: step table and measurements
 ├── pyproject.toml             # metadata, dependencies, tool config
 ├── uv.lock                    # pinned, shared environment
 ├── src/myapp/
 │   ├── __init__.py
 │   ├── app.py                 # FastAPI app, Pydantic models, routes
 │   ├── config.py              # typed Settings and ModelSettings from the environment
+│   ├── healthcheck.py         # health check the container runs
 │   ├── model_client.py        # ModelClient protocol, echo and OpenAI-compatible clients
 │   └── main.py                # CLI entry-point placeholder
+├── models/digits.joblib       # trained digits classifier loaded at startup
 ├── docs/model-serving.md      # model architecture decision and measurements
+├── docs/deployment.md         # running the stack on Jetstream2, measurements
+├── docs/docker.md             # building and checking the app image
+├── measurements/              # before/after results of the blocking-call audit
+├── outputs/docker/            # raw Docker build logs and timings
 ├── scripts/bench_model.py     # latency benchmark through the service's client
+├── scripts/benchmark_predict.py  # ten concurrent /predict requests for the audit
+├── scripts/train_digits.py    # trains and saves models/digits.joblib
 └── tests/
     ├── conftest.py, fakes.py  # FakeModelClient and its fast and slow fixtures
     ├── test_config.py         # Settings validation tests
     ├── test_generate.py       # /generate endpoint, health during a slow request
     ├── test_health.py         # /health endpoint tests
+    ├── test_healthcheck.py    # container health check exit codes
     ├── test_model_client.py   # client lifecycle and dependency override
     ├── test_openai_client.py  # model settings, HTTP client, error mapping
     └── test_ready.py          # /ready endpoint and the client ping
@@ -370,6 +533,9 @@ A failure at any step fails the run. See results under the repository's
   dependencies and tool settings; no `setup.py`.
 - **uv.lock.** A committed lockfile makes installs reproducible across laptops, CI
   and, later, our Jetstream2 deployment.
+- **Language model in its own container.** The weights (1.1 GB) stay in a volume
+  instead of the app image, and we can switch models with env vars without
+  rebuilding.
 - **Quality gates in two places.** pre-commit stops problems before they are
   committed; CI enforces the same checks for everyone, so the main branch stays
   green.
@@ -382,3 +548,5 @@ A failure at any step fails the run. See results under the repository's
   `pyproject.toml` without committing `uv.lock`. Run `uv lock`, then commit
   `uv.lock`.
 - **Port 8000 already in use**: add `--port 8001` to the run command.
+- **`/ready` or `/generate` gives 503**: the model server isn't ready yet. Check
+  `docker compose ps` (the first start has to download the model).

@@ -54,6 +54,27 @@ a 10-second startup period, and 3 retries.
 
 ## Build measurements
 
+### Final image (TEAM02)
+
+Measured again on TEAM02 (m3.small) after everything was merged, since scikit-learn
+made the image bigger.
+
+| Measurement | Result |
+| --- | --- |
+| Image size (`docker image ls`) | 472 MB |
+| Rebuild after a one-line change, cached | 13.1 seconds |
+| Rebuild after a one-line change, `--no-cache` | 15.6 seconds |
+
+How: added a comment line to `src/myapp/main.py`, ran `docker compose build app` and
+then `docker compose build --no-cache app`, then removed the line.
+
+The two times are close since uv installs everything in under a second. Most of the
+time is copying the venv (~400 MB) into the final image, which happens both times.
+
+`docker system df` is in [deployment.md](deployment.md#measured-on-team02).
+
+### Earlier image (before scikit-learn)
+
 Measured locally on Windows with Docker Desktop and WSL2 Ubuntu 22.04.
 Docker reported 24 CPUs and 31.2 GiB of memory.
 
