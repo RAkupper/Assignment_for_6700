@@ -103,14 +103,28 @@ machine with Docker. More notes in [docs/deployment.md](docs/deployment.md).
 
 ### 2. Start it
 
+For a fresh clone with no local `.env` file:
+
 ```bash
 git clone https://github.com/RAkupper/Assignment_for_6700.git
 cd Assignment_for_6700
 docker compose up -d --build
 ```
 
-The first run downloads the model (1.1 GB), so it takes a bit longer. Config is in
-`.env.production.example`. If you want to change something, put it in a `.env` file.
+**If you already followed Quickstart:** reuse your existing checkout and stop its
+Uvicorn server first. The Quickstart `.env` overrides Compose's deployment defaults
+and selects `LLM_PROVIDER=echo`, so `/generate` would echo the prompt rather than
+call the model container. Before starting Compose, temporarily move that file aside
+(choose another backup name if this one already exists):
+
+```bash
+mv .env .env.local-backup
+docker compose up -d --build
+```
+
+The first run downloads the model (1.1 GB), so it takes a bit longer. Deployment
+defaults are in `.env.production.example` and `compose.yml`; use a `.env` file for
+intentional overrides.
 
 Wait until both containers show `healthy`:
 
@@ -202,6 +216,14 @@ docker compose up -d
 `down` keeps the downloaded model. The containers restart by themselves after a reboot
 or unshelve (`restart: unless-stopped`).
 
+If you backed up the Quickstart `.env`, restore it when returning to local
+development (after stopping Compose):
+
+```bash
+docker compose down
+mv .env.local-backup .env
+```
+
 ### 5. Using a different model server
 
 Set `LLM_BASE_URL` and `LLM_MODEL` in `.env`. For example, for the class server:
@@ -273,25 +295,27 @@ Run these commands from the project root. Start on your working branch with
 local changes committed. Both `blocking-before` and `blocking-after` must be
 available locally; if needed, download the tags with `git fetch origin --tags`.
 
-Stop any running development server first. The audit tags predate the `LLM_*`
-settings: a `.env` created by the current Quickstart causes `Settings` validation
-errors (`Extra inputs are not permitted`) on both tags. Git does not replace this
-ignored file when switching versions, so back it up and use the old tag's example
-for both measurements.
+Stop any server using port 8000 first. These commands work without a `.env` file;
+the audit versions use their default settings.
 
-In terminal 1, remember your branch and back up any existing `.env` to a temporary
-file, then switch to the blocking version, install its dependencies, and start
-one server worker. Keep this terminal open until the restoration step below:
+**If you already followed Quickstart:** its `.env` contains `LLM_*` settings that
+neither audit tag accepts, causing `Extra inputs are not permitted` at startup.
+Git leaves this ignored file in place when switching tags. Before continuing,
+temporarily move it aside (choose another backup name if this one already exists).
+Do the same for any other existing `.env` containing settings unsupported by the
+audit tags:
+
+```bash
+mv .env .env.audit-backup
+```
+
+In terminal 1, remember your branch, switch to the blocking version, install its
+dependencies, and start one server worker. Keep this terminal open until you
+return to your branch:
 
 ```bash
 audit_branch=$(git branch --show-current)
-audit_env_backup=""
-if [ -f .env ]; then
-  audit_env_backup=$(mktemp)
-  cp .env "$audit_env_backup"
-fi
 git switch --detach blocking-before
-cp .env.local.example .env
 uv sync --extra dev --frozen
 uv run uvicorn myapp.app:app --host 127.0.0.1 --port 8000 --workers 1
 ```
@@ -318,18 +342,19 @@ Wait for startup, then run the same benchmark in terminal 2:
 uv run python scripts/benchmark_predict.py --output measurements/after-rerun.json
 ```
 
-Stop the server with `Ctrl+C` in terminal 1, then return to your original branch,
-restore your configuration (or remove the temporary `.env` if none existed), and
-resync its dependencies in that same terminal. Do this even if a benchmark fails:
+Stop the server with `Ctrl+C` in terminal 1, then return to your original branch
+and resync its dependencies in that same terminal. Do this even if a benchmark fails:
 
 ```bash
 git switch "$audit_branch"
-if [ -n "$audit_env_backup" ]; then
-  mv "$audit_env_backup" .env
-else
-  rm .env
-fi
 uv sync --extra dev --frozen
+```
+
+If you moved `.env` aside, restore it after returning to your branch (use the
+backup name you chose):
+
+```bash
+mv .env.audit-backup .env
 ```
 
 The tags are checked out in detached HEAD mode for inspection and testing; make
