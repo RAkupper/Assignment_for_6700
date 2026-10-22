@@ -26,6 +26,10 @@ venv/
 # Notebook checkpoints
 .ipynb_checkpoints/
 
+# Generated Quarto HTML resources
+/README_files/
+/discussion_files/
+
 # Test coverage reports
 .coverage
 .coverage.*
