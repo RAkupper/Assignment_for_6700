@@ -273,12 +273,25 @@ Run these commands from the project root. Start on your working branch with
 local changes committed. Both `blocking-before` and `blocking-after` must be
 available locally; if needed, download the tags with `git fetch origin --tags`.
 
-In terminal 1, remember your branch, switch to the blocking version, install its
-dependencies, and start one server worker:
+Stop any running development server first. The audit tags predate the `LLM_*`
+settings: a `.env` created by the current Quickstart causes `Settings` validation
+errors (`Extra inputs are not permitted`) on both tags. Git does not replace this
+ignored file when switching versions, so back it up and use the old tag's example
+for both measurements.
+
+In terminal 1, remember your branch and back up any existing `.env` to a temporary
+file, then switch to the blocking version, install its dependencies, and start
+one server worker. Keep this terminal open until the restoration step below:
 
 ```bash
 audit_branch=$(git branch --show-current)
+audit_env_backup=""
+if [ -f .env ]; then
+  audit_env_backup=$(mktemp)
+  cp .env "$audit_env_backup"
+fi
 git switch --detach blocking-before
+cp .env.local.example .env
 uv sync --extra dev --frozen
 uv run uvicorn myapp.app:app --host 127.0.0.1 --port 8000 --workers 1
 ```
@@ -305,11 +318,18 @@ Wait for startup, then run the same benchmark in terminal 2:
 uv run python scripts/benchmark_predict.py --output measurements/after-rerun.json
 ```
 
-Stop the server with `Ctrl+C` in terminal 1, then return to your original branch
-in that same terminal:
+Stop the server with `Ctrl+C` in terminal 1, then return to your original branch,
+restore your configuration (or remove the temporary `.env` if none existed), and
+resync its dependencies in that same terminal. Do this even if a benchmark fails:
 
 ```bash
 git switch "$audit_branch"
+if [ -n "$audit_env_backup" ]; then
+  mv "$audit_env_backup" .env
+else
+  rm .env
+fi
+uv sync --extra dev --frozen
 ```
 
 The tags are checked out in detached HEAD mode for inspection and testing; make
