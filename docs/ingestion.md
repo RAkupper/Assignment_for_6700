@@ -13,9 +13,9 @@ Checked against live responses on 2026-10-25.
 | Source | What we pull | Access | What we found |
 |---|---|---|---|
 | eCFR | 8 CFR 214, 8 CFR 274a, 22 CFR 41, 22 CFR 62 | Versioner API, XML | Requires `Accept-Encoding: gzip`. 8 CFR 214 is ~150k words, 115k of them in §214.2. Paragraphs are flat `<P>` elements; hierarchy exists only as text markers like `(ii) ...—(A)`, up to six levels deep. `(i)` can be a letter or a roman numeral. Dated versions back to 2017. |
-| Federal Register | Documents touching those parts | API JSON for metadata; GovInfo for full text | 68 documents on 8 CFR 214 since 2020, including **proposed** rules (OPT fees, 60-day grace period). Rules run ~150 pages, mostly preamble. Full-text links on federalregister.gov return a bot-check page **with status 200**; GovInfo serves the same text. CFR part filter takes integers only (274a must be queried as 274). |
-| USCIS Policy Manual | Vol. 2 Part F (students) and related chapters | HTML | Chapters ~9k words, lettered and numbered headings, an update date, dozens of footnotes citing 8 CFR paragraphs. Returns 403 from our cloud test environment; must be checked from Jetstream2. Current version only, no history API. |
-| SEVP (Study in the States) | Student guidance pages | HTML | Refused automated access in testing. Most fragile source. |
+| Federal Register | Documents touching those parts | API, JSON metadata and full text | 68 documents on 8 CFR 214 since 2020, including **proposed** rules (OPT fees, 60-day grace period). Rules run ~150 pages, mostly preamble. Full text works from Jetstream2; from other networks it can return a bot-check page **with status 200**, so responses are validated and GovInfo is the fallback. CFR part filter takes integers only (274a must be queried as 274). |
+| USCIS Policy Manual | Vol. 2 Part F (students) and related chapters | HTML, **manual capture** | Chapters ~9k words, lettered and numbered headings, an update date, dozens of footnotes citing 8 CFR paragraphs. Blocks automated access from Jetstream2 (Akamai "Access Denied"). No history API. |
+| SEVP (Study in the States) | Student guidance pages | HTML, **manual capture** | Returns 403 to automated requests from Jetstream2. |
 
 ## Principles
 
@@ -44,7 +44,9 @@ Checked against live responses on 2026-10-25.
                          Qdrant           vectors; payload = provision metadata
 ```
 
-All of it lives under `INGEST_DATA_DIR`, bind-mounted at `/data` on the instance and
+All of it lives under `INGEST_DATA_DIR`. On the instance that is a dedicated Jetstream2
+volume (TEAM02's root disk has ~3.7 GB free), bind-mounted into containers at `/data`,
+and
 ignored by git and Docker.
 
 ```
@@ -197,11 +199,26 @@ What the loader is expected to do:
 Deployment: a `qdrant` service in `compose.yml` with a named volume, as in the Docker
 lecture.
 
+## Manually captured sources
+
+USCIS and Study in the States block automated access, and we do not work around
+that. Instead, a fixed list of pages is saved from a normal browser into
+`manual/<source>/` with a manifest:
+
+```
+url, captured_at, captured_by, sha256, filename
+```
+
+`ingest fetch` copies these into `raw/` like any other response, so parsing, history,
+and change detection work the same. Their fetch rows are marked `manual`. Re-capture
+monthly, or when a Federal Register rule touches what they cover.
+
 ## Open questions
 
-1. Can the Jetstream2 instance reach uscis.gov and studyinthestates.dhs.gov? If SEVP
-   stays blocked, do we snapshot its pages by hand?
+1. Who does the manual capture, and which Policy Manual chapters and Study in the
+   States pages are on the list?
 2. Which teammate owns chunking and the Qdrant loader, and do they agree with the
    handoff contract above?
-3. Stretch sources (IRS publications, form instructions) fit as new sources with
+3. Can we create a 20 GB volume for `/data` on the shared allocation?
+4. Stretch sources (IRS publications, form instructions) fit as new sources with
    `authority = guidance`; confirm before we build them.
