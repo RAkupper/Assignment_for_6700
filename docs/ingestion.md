@@ -53,8 +53,8 @@ data/
   catalog.sqlite
 ```
 
-**Decided:** SQLite for the catalog. One file, no server, transactions, and its FTS5
-extension gives BM25 keyword search over current provision text for free.
+**Decided:** SQLite for the catalog. One file, no server, transactions. It is the
+source of truth; Qdrant is derived from it and can be rebuilt from it at any time.
 
 ## Catalog tables
 
@@ -66,7 +66,6 @@ extension gives BM25 keyword search over current provision text for free.
 | `provision_versions` | distinct text of a provision over time | `provision_id`, `version`, `text`, `content_hash`, `valid_from`, `valid_to`, `status`, `source_document`, `fetch_id` |
 | `references` | citation found inside a provision | `from_provision_id`, `from_version`, `to_citation`, `to_provision_id` (null if not in our corpus) |
 | `changes` | detected difference between runs | `run_id`, `provision_id`, `kind` (added, modified, removed), `old_hash`, `new_hash` |
-| `provisions_fts` | FTS5 index over current text | |
 
 A new `provision_versions` row is written only when `content_hash` changes, so
 backfilling history costs storage only for paragraphs that actually changed.
@@ -153,12 +152,56 @@ last run.
 - Rejected fetches are never parsed.
 - No provision text appears in logs.
 
+## Handoff to retrieval (Qdrant)
+
+**Decided:** Qdrant is the vector database. Ingestion ends at `catalog.sqlite`;
+chunking, embedding, and loading belong to the retrieval owner. This section is the
+contract between the two.
+
+What ingestion guarantees:
+
+- Every provision version in `provision_versions` is complete and validated when its
+  run's `status` is `succeeded`. Read only from succeeded runs.
+- `changes` lists every added, modified, and removed provision per run, so the loader
+  can sync incrementally instead of reloading everything.
+- `provision_id` and `version` never change meaning once written.
+
+What the loader is expected to do:
+
+- **Load every version, not just current ones.** History is part of the product. The
+  default query filter is "in force now" (`valid_to` is null); "as of date X" is a date
+  filter on the same collection.
+- **Use deterministic point ids**: a UUIDv5 of `provision_id`, `version`, and chunk
+  number. Re-running a load updates points in place instead of duplicating them.
+- **Copy these fields into the payload** and create a payload index on each before
+  loading, so filters run before vector search:
+
+  | Field | Qdrant index type |
+  |---|---|
+  | `provision_id` | keyword |
+  | `source` | keyword |
+  | `authority` | keyword |
+  | `status` | keyword |
+  | `visa_types` | keyword (array) |
+  | `valid_from`, `valid_to` | datetime |
+
+- **Keep keyword search in Qdrant**: store a sparse BM25 vector next to the dense one
+  and fuse them in one query, so the same filters apply to both. Exact terms like
+  "I-983" or "cap-gap" need this.
+- **Sync from `changes`** after each succeeded run: upsert added and modified, delete
+  removed. Take a Qdrant snapshot before each sync; rolling back the app image does not
+  roll back data.
+- **Chunks never cross provision boundaries.** A long provision may split into several
+  chunks; a chunk never mixes two provisions, so every answer cites one exact paragraph.
+
+Deployment: a `qdrant` service in `compose.yml` with a named volume, as in the Docker
+lecture.
+
 ## Open questions
 
 1. Can the Jetstream2 instance reach uscis.gov and studyinthestates.dhs.gov? If SEVP
    stays blocked, do we snapshot its pages by hand?
-2. Who owns chunking and Qdrant? The contract is: chunks carry `provision_id` and
-   `version`, and Qdrant payload copies `authority`, `status`, `visa_types`,
-   `valid_from`, `valid_to` for pre-filtering.
+2. Which teammate owns chunking and the Qdrant loader, and do they agree with the
+   handoff contract above?
 3. Stretch sources (IRS publications, form instructions) fit as new sources with
    `authority = guidance`; confirm before we build them.
