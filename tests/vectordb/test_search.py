@@ -5,7 +5,7 @@ import pytest
 from qdrant_client import QdrantClient
 
 from myapp.vectordb.loader import build
-from myapp.vectordb.search import Hit, Searcher
+from myapp.vectordb.search import Hit, Searcher, SearchSettings
 from tests.vectordb.conftest import FakeEncoder, make_catalog
 
 CAMPUS = "8 CFR 214.2(f)(9)(i)"
@@ -98,6 +98,7 @@ def test_returns_k_hits_in_the_agreed_shape(searcher: Searcher) -> None:
     assert set(hits[0].model_dump()) == {
         "provision_id",
         "score",
+        "relevance",
         "heading_path",
         "text",
         "source",
@@ -147,3 +148,31 @@ def test_source_filter(searcher: Searcher) -> None:
 
 def test_blank_query_returns_nothing(searcher: Searcher) -> None:
     assert searcher.search("   ") == []
+
+
+def test_relevance_is_a_cosine(searcher: Searcher) -> None:
+    hits = searcher.search("Form I-983", k=10)
+    assert all(-1.0 <= h.relevance <= 1.0 for h in hits)
+    assert hits[0].relevance == max(h.relevance for h in hits)
+
+
+def test_cutoff_drops_weak_hits(searcher: Searcher) -> None:
+    hits = searcher.search("Form I-983", k=10)
+    best = hits[0].relevance
+    kept = searcher.search("Form I-983", k=10, min_relevance=best)
+    assert ids(kept) == [STEM]
+
+
+def test_nothing_relevant_returns_empty(searcher: Searcher) -> None:
+    assert searcher.search("Form I-983", min_relevance=1.01) == []
+
+
+def test_settings_set_the_defaults(searcher: Searcher) -> None:
+    strict = Searcher(
+        searcher.client,
+        searcher.encoder,
+        "provisions",
+        SearchSettings(k=1, min_relevance=1.0),
+    )
+    assert strict.search("employment") == []
+    assert len(strict.search("employment", min_relevance=0.0)) == 1

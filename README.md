@@ -336,7 +336,7 @@ uv run python -m myapp.vectordb.search "Can I work on campus?" --visa F-1
 ```
 
 ```text
-0.500  8 CFR 214.2(f)(9)(i)  [regulation, in_force]
+rel 0.812  rrf 1.000  8 CFR 214.2(f)(9)(i)  [regulation, in_force]
        On-campus employment must be performed on the school premises.
 ```
 
@@ -351,18 +351,24 @@ hits = await asyncio.to_thread(searcher.search, question, k=3, visa_type="F-1")
 context = [h.model_dump() for h in hits]
 ```
 
-Each hit has `provision_id` (the citation), `score`, `heading_path`, `text`,
-`source`, `authority`, `status`, `visa_types`, `valid_from` and `valid_to`.
+Each hit has `provision_id` (the citation), `score`, `relevance`, `heading_path`,
+`text`, `source`, `authority`, `status`, `visa_types`, `valid_from` and `valid_to`.
+`score` is the RRF rank score and only orders one result list. `relevance` is the
+cosine similarity between the question and the provision, so it means the same thing
+across questions; hits below `SEARCH_MIN_RELEVANCE` are dropped. An empty list means
+nothing in the rules is close enough, and the app should say so and point to the DSO.
+For an `as_of` search, a `superseded` hit was the rule on that date.
 Defaults: dense and BM25 search fused with RRF, rules in force today, proposed rules
 excluded. Options:
 
 | Option | Effect |
 | ------ | ------ |
-| `k` | Number of hits, default 3. |
+| `k` | Number of hits, default `SEARCH_K`. |
 | `as_of` | A `date`: the rules in force that day instead of today. |
 | `visa_type` | Provisions for that visa plus provisions that apply to every visa. |
 | `sources` | Limit to `ecfr`, `federal_register`, `uscis_policy_manual`, `sevp`. |
 | `include_proposed` | Also return proposed rules. Their `status` is `proposed`; label them as not law. |
+| `min_relevance` | Override `SEARCH_MIN_RELEVANCE` for one call. |
 
 ## How-to guides
 
@@ -561,6 +567,14 @@ Changing the model is a setting change plus a rebuild into a new collection vers
 | `EMBED_SPARSE_MODEL` | `Qdrant/bm25` | Sparse keyword model; Qdrant applies IDF at query time. |
 | `EMBED_CACHE_DIR` | unset | Where model weights are cached; a volume under Docker. |
 | `EMBED_BATCH_SIZE` | `64` | Must be positive. |
+
+`SearchSettings` in `src/myapp/vectordb/search.py` reads the `SEARCH_` prefix.
+
+| Variable | Default | Meaning and validation |
+| -------- | ------- | ---------------------- |
+| `SEARCH_K` | `3` | Hits returned when the caller gives no `k`; must be positive. |
+| `SEARCH_CANDIDATE_K` | `50` | Candidates each of dense and BM25 contributes before fusion. |
+| `SEARCH_MIN_RELEVANCE` | `0.0` | Drop hits whose cosine to the question is below this; 0 is off until tuned on real data. |
 
 The Qdrant payload indexes follow the handoff contract in `docs/ingestion.md`:
 `provision_id`, `source`, `authority`, `status`, `visa_types` (keyword) and

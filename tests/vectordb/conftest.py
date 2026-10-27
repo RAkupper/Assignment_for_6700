@@ -11,7 +11,7 @@ from qdrant_client import models
 from myapp.vectordb.encoders import Encoded
 
 SCHEMA = Path(__file__).with_name("catalog_schema.sql")
-DIM = 16
+DIM = 64  # wide enough that few words share a slot
 
 
 def _token_id(token: str) -> int:
