@@ -1,6 +1,6 @@
 from datetime import date
 from hashlib import sha256
-from typing import Final, Literal
+from typing import Final, Literal, Self
 
 from pydantic import (
     AwareDatetime,
@@ -10,12 +10,22 @@ from pydantic import (
     HttpUrl,
     computed_field,
     field_serializer,
+    model_validator,
 )
 
 SCHEMA_VERSION: Final = 1  # bump on any breaking change to Record
 
 SourceName = Literal["ecfr", "federal_register", "uscis_policy_manual", "sevp"]
 VisaType = Literal["F-1", "F-2", "J-1", "J-2", "M-1", "M-2"]
+Authority = Literal["regulation", "agency_policy", "guidance", "rulemaking"]
+Status = Literal["in_force", "pending", "proposed", "superseded", "withdrawn"]
+
+AUTHORITY_BY_SOURCE: Final[dict[SourceName, Authority]] = {  # docs/ingestion.md
+    "ecfr": "regulation",
+    "uscis_policy_manual": "agency_policy",
+    "sevp": "guidance",
+    "federal_register": "rulemaking",
+}
 
 
 class RawDocument(BaseModel):
@@ -29,21 +39,36 @@ class RawDocument(BaseModel):
 
 
 class RecordMetadata(BaseModel):
+    """One citable provision. Its identity, not its text, so it is stable."""
+
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     schema_version: Literal[1] = SCHEMA_VERSION
     source: SourceName
-    citation: str = Field(min_length=1)  # e.g. 8 CFR 214.2(f)(10)
-    title: str
+    provision_id: str = Field(min_length=1)  # the citation: 8 CFR 214.2(f)(10)(ii)
+    parent_id: str | None = None  # enclosing provision; None at the top
+    heading: str
+    heading_path: str = ""  # "Part 214 > 214.2 > (f)"; kept out of the text
+    authority: Authority
+    status: Status
+    valid_from: date | None  # None when the source gives no date
     url: HttpUrl
-    effective_date: date | None  # None when the source gives no date
     retrieved_at: AwareDatetime
     visa_types: frozenset[VisaType] = frozenset()  # empty means applies to all
+    visa_types_rule: str = ""  # which citation rule assigned visa_types
 
-    @computed_field  # type: ignore[prop-decorator]
-    @property
-    def id(self) -> str:
-        return f"{self.source}:{self.citation}"  # stable across re-pulls
+    @model_validator(mode="after")
+    def _check_consistency(self) -> Self:
+        if self.authority != AUTHORITY_BY_SOURCE[self.source]:
+            raise ValueError(
+                f"{self.source} records must have authority "
+                f"{AUTHORITY_BY_SOURCE[self.source]}"
+            )
+        if self.visa_types and not self.visa_types_rule:
+            raise ValueError("visa_types needs the visa_types_rule that set it")
+        if self.parent_id == self.provision_id:
+            raise ValueError("a provision cannot be its own parent")
+        return self
 
     @field_serializer("visa_types")
     def _sorted(self, value: frozenset[VisaType]) -> list[VisaType]:
@@ -51,6 +76,8 @@ class RecordMetadata(BaseModel):
 
 
 class Record(BaseModel):
+    """What parse() yields. The catalog assigns version and valid_to on write."""
+
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     metadata: RecordMetadata
@@ -59,4 +86,4 @@ class Record(BaseModel):
     @computed_field  # type: ignore[prop-decorator]
     @property
     def content_hash(self) -> str:
-        return sha256(self.text.encode()).hexdigest()  # detects changed text
+        return sha256(self.text.encode()).hexdigest()  # new version when it changes
