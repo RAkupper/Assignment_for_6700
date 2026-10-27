@@ -13,7 +13,7 @@ CREATE TABLE provision_versions (
     version INTEGER NOT NULL,
     text TEXT NOT NULL,
     status TEXT NOT NULL,
-    valid_from TEXT NOT NULL,
+    valid_from TEXT,  -- null when the source gives no date
     valid_to TEXT,
     fetch_id INTEGER REFERENCES fetches,
     PRIMARY KEY (provision_id, version)

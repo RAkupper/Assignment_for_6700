@@ -329,6 +329,41 @@ uv run python -m myapp.vectordb.collection activate provisions_v1
 
 Delete an old collection only after the new one has been live for a release.
 
+### 4. Search
+
+```bash
+uv run python -m myapp.vectordb.search "Can I work on campus?" --visa F-1
+```
+
+```text
+0.500  8 CFR 214.2(f)(9)(i)  [regulation, in_force]
+       On-campus employment must be performed on the school premises.
+```
+
+In code, create one `Searcher` per process and call it off the event loop, since
+embedding is CPU work and the Qdrant client blocks:
+
+```python
+from myapp.vectordb.search import Searcher
+
+searcher = Searcher.from_settings()  # loads the models once
+hits = await asyncio.to_thread(searcher.search, question, k=3, visa_type="F-1")
+context = [h.model_dump() for h in hits]
+```
+
+Each hit has `provision_id` (the citation), `score`, `heading_path`, `text`,
+`source`, `authority`, `status`, `visa_types`, `valid_from` and `valid_to`.
+Defaults: dense and BM25 search fused with RRF, rules in force today, proposed rules
+excluded. Options:
+
+| Option | Effect |
+| ------ | ------ |
+| `k` | Number of hits, default 3. |
+| `as_of` | A `date`: the rules in force that day instead of today. |
+| `visa_type` | Provisions for that visa plus provisions that apply to every visa. |
+| `sources` | Limit to `ecfr`, `federal_register`, `uscis_policy_manual`, `sevp`. |
+| `include_proposed` | Also return proposed rules. Their `status` is `proposed`; label them as not law. |
+
 ## How-to guides
 
 ### Train and save the digits model
@@ -623,7 +658,8 @@ Assignment_for_6700/
 │   └── vectordb/
 │       ├── collection.py      # QdrantSettings, versions, alias swap, status and activate CLI
 │       ├── encoders.py        # EmbeddingSettings, dense BGE and sparse BM25 encoders
-│       └── loader.py          # one-off task: catalog.sqlite into the next collection version
+│       ├── loader.py          # one-off task: catalog.sqlite into the next collection version
+│       └── search.py          # Searcher: hybrid search with date, visa and source filters
 ├── models/digits.joblib       # trained digits classifier loaded at startup
 ├── docs/model-serving.md      # model architecture decision and measurements
 ├── docs/deployment.md         # running the stack on Jetstream2, measurements
@@ -644,7 +680,9 @@ Assignment_for_6700/
     ├── test_ready.py          # /ready endpoint and the client ping
     └── vectordb/
         ├── catalog_schema.sql # minimal catalog tables the loader reads
-        └── test_loader.py     # loader against a fixture catalog and in-memory Qdrant
+        ├── conftest.py        # bag-of-words fake encoder and fixture catalog builder
+        ├── test_loader.py     # loader against a fixture catalog and in-memory Qdrant
+        └── test_search.py     # ranking, date, visa, source and proposed-rule filters
 ```
 
 ### Continuous integration

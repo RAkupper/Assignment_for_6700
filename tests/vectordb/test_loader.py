@@ -1,7 +1,4 @@
-import hashlib
-import sqlite3
 import warnings
-from collections.abc import Sequence
 from pathlib import Path
 
 import pytest
@@ -14,105 +11,41 @@ from myapp.vectordb.collection import (
     status,
     versions,
 )
-from myapp.vectordb.encoders import Encoded
 from myapp.vectordb.loader import build, load, point_id, to_rfc3339
+from tests.vectordb.conftest import DIM, FakeEncoder, make_catalog
 
-SCHEMA = Path(__file__).with_name("catalog_schema.sql")
-DIM = 4
 OPT = "8 CFR 214.2(f)(10)(ii)"
-
-
-class FakeEncoder:
-    """Deterministic vectors from a hash; records what it was asked to embed."""
-
-    dense_model = "fake-encoder"
-    dim = DIM
-
-    def __init__(self) -> None:
-        self.texts: list[str] = []
-
-    def embed_documents(self, texts: Sequence[str]) -> list[Encoded]:
-        self.texts.extend(texts)
-        out = []
-        for t in texts:
-            h = hashlib.sha256(t.encode()).digest()
-            dense = [b / 255 + 0.01 for b in h[:DIM]]
-            sparse = models.SparseVector(indices=[h[0], 256 + h[1]], values=[1.0, 1.0])
-            out.append(Encoded(dense=dense, sparse=sparse))
-        return out
+J1 = "8 CFR 214.2(j)(1)"
 
 
 @pytest.fixture
 def catalog(tmp_path: Path) -> Path:
-    path = tmp_path / "catalog.sqlite"
-    with sqlite3.connect(path) as con:
-        con.executescript(SCHEMA.read_text())
-        con.executemany(
-            "INSERT INTO runs VALUES (?, ?, ?)",
-            [(1, "ecfr", "succeeded"), (2, "ecfr", "failed")],
-        )
-        con.executemany("INSERT INTO fetches VALUES (?, ?)", [(10, 1), (20, 2)])
-        con.executemany(
-            "INSERT INTO provisions VALUES (?, ?, ?, ?, ?)",
-            [
-                (
-                    OPT,
-                    "ecfr",
-                    "Part 214 > F-1 > Practical training",
-                    "regulation",
-                    '["F-1", "F-2"]',
-                ),
-                (
-                    "8 CFR 214.2(j)(1)",
-                    "ecfr",
-                    "Part 214 > J-1",
-                    "regulation",
-                    '["J-1", "J-2"]',
-                ),
-            ],
-        )
-        con.executemany(
-            "INSERT INTO provision_versions VALUES (?, ?, ?, ?, ?, ?, ?)",
-            [
-                (
-                    OPT,
-                    1,
-                    "Old OPT text.",
-                    "superseded",
-                    "2020-01-01T00:00:00Z",
-                    "2024-01-01T00:00:00Z",
-                    10,
-                ),
-                (
-                    OPT,
-                    2,
-                    "Current OPT text.",
-                    "in_force",
-                    "2024-01-01",  # date only, as the catalog will store it
-                    None,
-                    10,
-                ),
-                (
-                    "8 CFR 214.2(j)(1)",
-                    1,
-                    "Exchange visitor text.",
-                    "in_force",
-                    "2020-01-01T00:00:00Z",
-                    None,
-                    10,
-                ),
-                (
-                    "8 CFR 214.2(j)(1)",
-                    2,
-                    "From a failed run.",
-                    "in_force",
-                    "2026-01-01T00:00:00Z",
-                    None,
-                    20,
-                ),
-            ],
-        )
-    return path
+    return make_catalog(
+        tmp_path / "catalog.sqlite",
+        provisions=[
+            (
+                OPT,
+                "ecfr",
+                "Part 214 > F-1 > Practical training",
+                "regulation",
+                '["F-1", "F-2"]',
+            ),
+            (J1, "ecfr", "Part 214 > J-1", "regulation", '["J-1", "J-2"]'),
+        ],
+        versions=[
+            (
+                OPT,
+                1,
+                "Old OPT text.",
+                "superseded",
+                "2020-01-01T00:00:00Z",
+                "2024-01-01T00:00:00Z",
+            ),
+            (OPT, 2, "Current OPT text.", "in_force", "2024-01-01", None),
+            (J1, 1, "Exchange visitor text.", "in_force", "2020-01-01T00:00:00Z", None),
+        ],
+        failed=[(J1, 2, "From a failed run.", "in_force", "2026-01-01", None)],
+    )
 
 
 @pytest.fixture
@@ -129,7 +62,7 @@ def test_loads_every_version_from_succeeded_runs_only(
 ) -> None:
     assert load(client, FakeEncoder(), catalog, "provisions_v1") == 3
     ids = {p.id for p in client.scroll("provisions_v1", limit=10)[0]}
-    assert point_id("8 CFR 214.2(j)(1)", 2, 0) not in ids
+    assert point_id(J1, 2, 0) not in ids
 
 
 def test_reloading_updates_in_place(client: QdrantClient, catalog: Path) -> None:

@@ -174,6 +174,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     parser.add_argument("--activate", action="store_true")  # move the alias after
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
+    logging.getLogger("httpx").setLevel(logging.WARNING)  # one line per request
 
     settings = QdrantSettings()
     try:
