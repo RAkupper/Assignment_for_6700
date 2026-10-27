@@ -42,6 +42,7 @@ class Encoder:
     def __init__(self, settings: EmbeddingSettings) -> None:
         cache = str(settings.cache_dir) if settings.cache_dir else None
         self.dense_model = settings.dense_model
+        self.dim = TextEmbedding.get_embedding_size(settings.dense_model)
         self.batch_size = settings.batch_size
         self._dense = TextEmbedding(settings.dense_model, cache_dir=cache)
         self._sparse = SparseTextEmbedding(settings.sparse_model, cache_dir=cache)

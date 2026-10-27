@@ -1,7 +1,7 @@
-"""Load provision versions from catalog.sqlite into a new Qdrant collection.
+"""Build a new Qdrant collection version from catalog.sqlite.
 
 Run as a one-off task, never at app startup:
-    docker compose run --rm app python -m myapp.vectordb.loader --version 2 --activate
+    docker compose run --rm app python -m myapp.vectordb.loader --activate
 """
 
 import argparse
@@ -10,7 +10,9 @@ import logging
 import sqlite3
 import uuid
 from collections.abc import Iterator, Sequence
+from contextlib import closing
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from itertools import islice
 from pathlib import Path
 from typing import Any, Protocol
@@ -22,7 +24,9 @@ from myapp.vectordb.collection import (
     SPARSE,
     QdrantSettings,
     create_collection,
+    current_target,
     get_client,
+    next_version,
     point_alias,
     versioned_name,
 )
@@ -46,6 +50,7 @@ ORDER BY p.provision_id, v.version
 
 class DocumentEncoder(Protocol):
     dense_model: str
+    dim: int
 
     def embed_documents(self, texts: Sequence[str]) -> list[Encoded]: ...
 
@@ -64,10 +69,19 @@ def point_id(provision_id: str, version: int, chunk: int) -> str:
     return str(uuid.uuid5(POINT_NAMESPACE, f"{provision_id}|{version}|{chunk}"))
 
 
+def to_rfc3339(value: str | None) -> str | None:
+    """Dates and naive timestamps become UTC, as Qdrant's datetime index wants."""
+    if value is None:
+        return None
+    dt = datetime.fromisoformat(value)
+    dt = dt.replace(tzinfo=UTC) if dt.tzinfo is None else dt.astimezone(UTC)
+    return dt.isoformat().replace("+00:00", "Z")
+
+
 def read_chunks(catalog: Path) -> Iterator[Chunk]:
     """One chunk per provision version for now. Never crosses a provision."""
     uri = f"file:{catalog}?mode=ro"  # the loader never writes the catalog
-    with sqlite3.connect(uri, uri=True) as con:
+    with closing(sqlite3.connect(uri, uri=True)) as con:
         con.row_factory = sqlite3.Row
         for row in con.execute(VERSIONS_SQL):
             heading = row["heading_path"] or ""
@@ -79,8 +93,8 @@ def read_chunks(catalog: Path) -> Iterator[Chunk]:
                 "authority": row["authority"],
                 "status": row["status"],
                 "visa_types": json.loads(row["visa_types"] or "[]"),
-                "valid_from": row["valid_from"],
-                "valid_to": row["valid_to"],  # None means in force now
+                "valid_from": to_rfc3339(row["valid_from"]),
+                "valid_to": to_rfc3339(row["valid_to"]),  # None means in force now
                 "heading_path": heading,
                 "text": row["text"],
             }
@@ -123,30 +137,57 @@ def load(
     return total
 
 
+def build(
+    client: QdrantClient,
+    encoder: DocumentEncoder,
+    catalog: Path,
+    alias: str,
+    version: int | None = None,
+    replace: bool = False,
+    activate: bool = False,
+) -> str:
+    """Load into `<alias>_v<version>` (next free version by default). Returns its name.
+
+    Never touches the live collection: a rebuild is always a new or non-live version.
+    """
+    name = versioned_name(alias, version or next_version(client, alias))
+    if client.collection_exists(name):
+        if name == current_target(client, alias):
+            raise ValueError(f"{name} is live; build a new version instead")
+        if client.count(name).count and not replace:
+            raise ValueError(f"{name} already has points; pass replace to rebuild it")
+        client.delete_collection(name)  # empty or partial, and not live
+    create_collection(client, name, encoder.dim)
+    total = load(client, encoder, catalog, name)
+    log.info("loaded %d points into %s", total, name)
+    if activate:
+        previous = point_alias(client, alias, name)
+        log.info("alias %s: %s -> %s", alias, previous, name)
+    return name
+
+
 def main(argv: Sequence[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--catalog", type=Path, default=Path("data/catalog.sqlite"))
-    parser.add_argument("--version", type=int, required=True)  # builds <alias>_vN
+    parser.add_argument("--version", type=int)  # default: next free version
+    parser.add_argument("--replace", action="store_true")  # rebuild a non-live one
     parser.add_argument("--activate", action="store_true")  # move the alias after
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 
-    qs = QdrantSettings()
-    client = get_client(qs)
-    name = versioned_name(qs.alias, args.version)
-    if client.collection_exists(name) and client.count(name).count > 0:
-        raise SystemExit(f"{name} already has points; build a new version instead")
-    create_collection(client, name, qs.dense_dim)
-    total = load(client, Encoder(EmbeddingSettings()), args.catalog, name)
-    log.info("loaded %d points into %s", total, name)
-    if args.activate:
-        previous = point_alias(client, qs.alias, name)
-        log.info(
-            "alias %s: %s -> %s (roll back by pointing it at the old one)",
-            qs.alias,
-            previous,
-            name,
+    settings = QdrantSettings()
+    try:
+        build(
+            get_client(settings),
+            Encoder(EmbeddingSettings()),
+            args.catalog,
+            settings.alias,
+            version=args.version,
+            replace=args.replace,
+            activate=args.activate,
         )
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
 
 
 if __name__ == "__main__":

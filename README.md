@@ -293,38 +293,38 @@ The image is pinned so the server stays within one minor version of
 `qdrant-client`. Data lives in the `qdrant_data` volume and survives
 `docker rm`. The dashboard is at <http://localhost:6333/dashboard>.
 
-### 2. Create the collection
-
-```bash
-uv run python -m myapp.vectordb.collection
-```
-
-Prints `provisions_v1`. This creates the versioned collection with its payload
-indexes and points the `provisions` alias at it if no alias exists yet. It is safe
-to run again.
-
-### 3. Load the catalog
+### 2. Load the catalog
 
 Loading is a one-off task, never part of app startup, so two app copies can never
 load at once:
 
 ```bash
-uv run python -m myapp.vectordb.loader --catalog data/catalog.sqlite --version 2 --activate
+uv run python -m myapp.vectordb.loader --catalog data/catalog.sqlite --activate
 ```
 
-This builds `provisions_v2` beside the live collection, embeds every provision
-version from succeeded ingestion runs, and with `--activate` moves the
-`provisions` alias to it in one atomic step. The log prints the previous target.
-The loader refuses to write into a collection that already has points; a rebuild is
-always a new version. The first run downloads the embedding models (about 70 MB).
+This builds the next free version (`provisions_v1`, then `provisions_v2`, ...)
+beside the live one, embeds every provision version from succeeded ingestion runs,
+and with `--activate` moves the `provisions` alias to it in one atomic step. It never
+writes into the live collection. If a load crashes partway, rerun it with
+`--version N --replace` to rebuild that unfinished version. The first run downloads
+the embedding models (about 70 MB).
 
-### 4. Roll back
-
-Point the alias back at the previous collection. Nothing is reloaded:
+### 3. Check and roll back
 
 ```bash
-uv run python -c "from myapp.vectordb.collection import *; \
-s = QdrantSettings(); print(point_alias(get_client(s), s.alias, 'provisions_v1'))"
+uv run python -m myapp.vectordb.collection status
+```
+
+```text
+alias provisions -> provisions_v2
+provisions_v1: 1520 points
+provisions_v2: 1534 points  (live)
+```
+
+To roll back, point the alias at the previous version. Nothing is reloaded:
+
+```bash
+uv run python -m myapp.vectordb.collection activate provisions_v1
 ```
 
 Delete an old collection only after the new one has been live for a release.
@@ -516,14 +516,13 @@ erroring) or `502` (malformed reply). See
 | `QDRANT_URL` | `http://localhost:6333` | Qdrant server; must be a valid URL. Under Compose this will be `http://qdrant:6333`. |
 | `QDRANT_API_KEY` | unset | Kept secret in logs and reprs. |
 | `QDRANT_ALIAS` | `provisions` | The name the app queries; versioned collections are `<alias>_v<N>`. |
-| `QDRANT_DENSE_DIM` | `384` | Dense vector size; must match the dense model. |
 
 `EmbeddingSettings` in `src/myapp/vectordb/encoders.py` reads the `EMBED_` prefix.
 Changing the model is a setting change plus a rebuild into a new collection version.
 
 | Variable | Default | Meaning and validation |
 | -------- | ------- | ---------------------- |
-| `EMBED_DENSE_MODEL` | `BAAI/bge-small-en-v1.5` | Dense model (fastembed, ONNX, no PyTorch). |
+| `EMBED_DENSE_MODEL` | `BAAI/bge-small-en-v1.5` | Dense model (fastembed, ONNX, no PyTorch). The collection's vector size is read from the model. |
 | `EMBED_SPARSE_MODEL` | `Qdrant/bm25` | Sparse keyword model; Qdrant applies IDF at query time. |
 | `EMBED_CACHE_DIR` | unset | Where model weights are cached; a volume under Docker. |
 | `EMBED_BATCH_SIZE` | `64` | Must be positive. |
@@ -622,9 +621,9 @@ Assignment_for_6700/
 │   ├── model_client.py        # ModelClient protocol, echo and OpenAI-compatible clients
 │   ├── main.py                # CLI entry-point placeholder
 │   └── vectordb/
-│       ├── collection.py      # QdrantSettings, collection and payload indexes, alias swap
+│       ├── collection.py      # QdrantSettings, versions, alias swap, status and activate CLI
 │       ├── encoders.py        # EmbeddingSettings, dense BGE and sparse BM25 encoders
-│       └── loader.py          # one-off task: catalog.sqlite to a new collection version
+│       └── loader.py          # one-off task: catalog.sqlite into the next collection version
 ├── models/digits.joblib       # trained digits classifier loaded at startup
 ├── docs/model-serving.md      # model architecture decision and measurements
 ├── docs/deployment.md         # running the stack on Jetstream2, measurements
