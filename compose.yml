@@ -1,5 +1,6 @@
 # Service stack: the FastAPI app, the model server it calls over HTTP, and the
-# Qdrant vector database. How to start, check and troubleshoot it on Jetstream2:
+# Qdrant vector database, with generation enabled for /ask.
+# How to start, check and troubleshoot it on Jetstream2:
 # docs/deployment.md
 #
 # Fresh clone on the instance:   docker compose up -d
@@ -77,6 +78,8 @@ services:
       LLM_MAX_TOKENS: ${LLM_MAX_TOKENS:-128}
       QDRANT_URL: ${QDRANT_URL:-http://qdrant:6333}
       EMBED_CACHE_DIR: /embed-cache
+      GENERATION_ENABLED: ${GENERATION_ENABLED:-true}
+      GENERATION_MAX_CONTEXT_CHARS: ${GENERATION_MAX_CONTEXT_CHARS:-6000}
     volumes:
       - ${DATA_VOLUME_DIR:-./volume}/embed-cache:/embed-cache
     ports:
