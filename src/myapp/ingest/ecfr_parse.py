@@ -24,10 +24,13 @@ LEAD = re.compile(
     rf"(?:{OPEN}(?P<h>[^{CLOSE}]*){CLOSE})?"
 )
 JOIN = re.compile(
-    rf"^\s*(?P<sep>{EM_DASH}|{EN_DASH}|-|\.)?\s*(?={MARK}[\s({OPEN}{ITALIC}])"
+    rf"^\s*(?P<sep>{EM_DASH}|{EN_DASH}|-|\.)?\s*"
+    rf"(?={MARK}[\s({OPEN}{ITALIC}{EN_DASH}-])"  # "-": a range like "(i)-(ii)"
 )
 BLOCKS = ("P", "FP", "NOTE", "TABLE", "GPOTABLE", "EXTRACT", "FTNT", "DIV")
 TABLES = ("TABLE", "GPOTABLE")
+TITLES = ("CAPTION", "TTITLE", "HD", "HD1", "HD2", "HD3", "HED", "P")  # P: gpotbl_title
+NAVIGATION = re.compile(r"\b(?:Section|Paragraph) Contents\b")
 
 VISA_RULES = (  # docs/ingestion.md: assigned by citation, never guessed
     ("8 CFR 214.2(f)", ("F-1", "F-2")),
@@ -303,10 +306,11 @@ def _parse_section(section: ET.Element, title: str, report: ParseReport) -> None
     for i, el in enumerate(blocks):
         if el.tag != "P":
             tables = [t for t in el.iter() if t.tag in TABLES]  # DIV can wrap one
+            titles = " ".join(_flat(t) for t in el.iter() if t.tag in TITLES)
+            if NAVIGATION.search(titles):  # contents tables, titled inside or beside
+                continue
             for table in tables:
-                caption = _flat(next(table.iter("CAPTION"), ET.Element("x")))
-                if "Contents" not in caption:  # contents tables are navigation
-                    append(_table_text(table))
+                append(_table_text(table))
             if not tables:
                 append(_flat(el))
             continue

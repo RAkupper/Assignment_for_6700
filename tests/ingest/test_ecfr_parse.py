@@ -151,6 +151,27 @@ def test_tables_notes_and_navigation() -> None:
     assert "Nav" not in text
 
 
+def test_navigation_table_titled_beside_the_table_is_dropped() -> None:
+    nav = (
+        '<DIV><DIV class="table_head"><P class="gpotbl_title">Table 2 to Paragraph '
+        "(f)\u2014Paragraph Contents</P></DIV><DIV><TABLE><TR><TD>(1) Admission"
+        "</TD></TR><TR><TD>(2) Form I-20</TD></TR></TABLE></DIV></DIV>"
+    )
+    body = (
+        '<DIV5 N="214"><DIV8 N="214.2"><HEAD>\u00a7 214.2 Rules.</HEAD>'
+        "<P>(a) A.</P><P>(f) <I>Students.</I></P>" + nav + "<P>(1) Admission.</P>"
+        "</DIV8></DIV5>"
+    ).encode()
+    got = {p.provision_id: p.text for p in with_text(parse_part(body, "8"))}
+    assert "8 CFR 214.2(f)" not in got  # heading only once navigation is dropped
+    assert got["8 CFR 214.2(f)(1)"] == "Admission."
+
+
+def test_reserved_range_right_after_a_heading() -> None:
+    got = parsed("(a) A.", "(1) <I>Old program</I>\u2014(i)-(ii) [Reserved]", "(2) B.")
+    assert "8 CFR 214.2(a)(1)" not in got and "8 CFR 214.2(a)(2)" in got
+
+
 def test_visa_types_follow_citation_rules() -> None:
     got = parsed(*[f"({c}) Para {c}." for c in "abcdefghij"], "(1) J one.")
     assert got["8 CFR 214.2(f)"].visa_types == ("F-1", "F-2")

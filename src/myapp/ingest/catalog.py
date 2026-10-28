@@ -89,12 +89,12 @@ def migrate(path: Path, backups: Path, source: Traversable = MIGRATIONS) -> list
     log = []
     con = connect(path)
     try:
-        have = schema_version(con)
+        have = started = schema_version(con)
         pending = [(n, name) for n, name in available(source) if n > have]
         if not pending:
             return [f"schema is at {have}: nothing to do"]
         for number, name in pending:
-            if have > 0:  # a fresh catalog has nothing worth backing up
+            if started > 0:  # a catalog created by this run has nothing to lose
                 log.append(f"backed up to {backup(con, backups, name[:4])}")
             sql = (source / name).read_text()
             stamp = datetime.now(UTC).isoformat()
