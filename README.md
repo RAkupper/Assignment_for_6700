@@ -7,11 +7,17 @@ Update for HW2: it now has two models, a scikit-learn digit classifier inside th
 (`/predict`) and Qwen2.5-1.5B-Instruct running in a llama.cpp container
 (`/generate`). We deploy it on Jetstream2 with `docker compose up -d`.
 
+Final project: the retrieval layer for RAG over U.S. immigration rules is in progress.
+Provision text from the ingestion catalog is embedded and stored in a Qdrant vector
+database with dense (BGE) and sparse (BM25) vectors and filterable metadata. See
+[Vector database](#vector-database-qdrant).
+
 ## Contents
 
 - [Quickstart](#quickstart) (tutorial: clean machine to running service)
 - [Deploy with Compose](#deploy-with-compose) (run everything on an instance)
 - [Docker](#docker) (build, run, and check the container)
+- [Vector database (Qdrant)](#vector-database-qdrant) (collection, loading, rollback)
 - [How-to guides](#how-to-guides) (tests, linting, pre-commit, adding dependencies)
 - [Reference](#reference) (endpoints, project layout, CI pipeline)
 - [Explanation](#explanation) (why the project is structured this way)
@@ -270,6 +276,100 @@ cleanup commands, image size, and rebuild measurements.
 Note: this only starts the app. `/generate` and `/ready` need the model server too, so
 use [Compose](#deploy-with-compose) for the full thing.
 
+## Vector database (Qdrant)
+
+Retrieval reads from a Qdrant collection built from `data/catalog.sqlite` (see
+[docs/ingestion.md](docs/ingestion.md) for the catalog and the handoff contract).
+Compose integration is not done yet, so for now Qdrant runs as its own container.
+
+### 1. Start Qdrant locally
+
+```bash
+docker run -d --name qdrant --restart unless-stopped -p 6333:6333 \
+  -v qdrant_data:/qdrant/storage qdrant/qdrant:v1.19.2
+```
+
+The image is pinned so the server stays within one minor version of
+`qdrant-client`. Data lives in the `qdrant_data` volume and survives
+`docker rm`. The dashboard is at <http://localhost:6333/dashboard>.
+
+### 2. Load the catalog
+
+Loading is a one-off task, never part of app startup, so two app copies can never
+load at once:
+
+```bash
+uv run python -m myapp.vectordb.loader --catalog data/catalog.sqlite --activate
+```
+
+This builds the next free version (`provisions_v1`, then `provisions_v2`, ...)
+beside the live one, embeds every provision version from succeeded ingestion runs,
+and with `--activate` moves the `provisions` alias to it in one atomic step. It never
+writes into the live collection. If a load crashes partway, rerun it with
+`--version N --replace` to rebuild that unfinished version. The first run downloads
+the embedding models (about 70 MB).
+
+### 3. Check and roll back
+
+```bash
+uv run python -m myapp.vectordb.collection status
+```
+
+```text
+alias provisions -> provisions_v2
+provisions_v1: 1520 points
+provisions_v2: 1534 points  (live)
+```
+
+To roll back, point the alias at the previous version. Nothing is reloaded:
+
+```bash
+uv run python -m myapp.vectordb.collection activate provisions_v1
+```
+
+Delete an old collection only after the new one has been live for a release.
+
+### 4. Search
+
+```bash
+uv run python -m myapp.vectordb.search "Can I work on campus?" --visa F-1
+```
+
+```text
+rel 0.812  rrf 1.000  8 CFR 214.2(f)(9)(i)  [regulation, in_force]
+       On-campus employment must be performed on the school premises.
+```
+
+In code, create one `Searcher` per process and call it off the event loop, since
+embedding is CPU work and the Qdrant client blocks:
+
+```python
+from myapp.vectordb.search import Searcher
+
+searcher = Searcher.from_settings()  # loads the models once
+hits = await asyncio.to_thread(searcher.search, question, k=3, visa_type="F-1")
+context = [h.model_dump() for h in hits]
+```
+
+Each hit has `provision_id` (the citation), `score`, `relevance`, `heading_path`,
+`text`, `source`, `authority`, `status`, `visa_types`, `valid_from` and `valid_to`.
+`score` is the RRF rank score and only orders one result list. `relevance` is the
+cosine similarity between the question and the provision, so it means the same thing
+across questions; hits below `SEARCH_MIN_RELEVANCE` are dropped. An empty list means
+nothing in the rules is close enough, and the app should say so and point to the DSO.
+For an `as_of` search, a `superseded` hit was the rule on that date.
+Defaults: dense and BM25 search fused with RRF, rules in force today, proposed rules
+excluded. Options:
+
+| Option | Effect |
+| ------ | ------ |
+| `k` | Number of hits, default `SEARCH_K`. |
+| `as_of` | A `date`: the rules in force that day instead of today. |
+| `visa_type` | Provisions for that visa plus provisions that apply to every visa. |
+| `sources` | Limit to `ecfr`, `federal_register`, `uscis_policy_manual`, `sevp`. |
+| `include_proposed` | Also return proposed rules. Their `status` is `proposed`; label them as not law. |
+| `min_relevance` | Override `SEARCH_MIN_RELEVANCE` for one call. |
+
 ## How-to guides
 
 ### Train and save the digits model
@@ -448,6 +548,39 @@ Model failures reach clients as `504` (timeout), `503` (server unreachable or
 erroring) or `502` (malformed reply). See
 [docs/model-serving.md](docs/model-serving.md) for where the model runs and why.
 
+### Vector database settings
+
+`QdrantSettings` in `src/myapp/vectordb/collection.py` reads the `QDRANT_` prefix.
+
+| Variable | Default | Meaning and validation |
+| -------- | ------- | ---------------------- |
+| `QDRANT_URL` | `http://localhost:6333` | Qdrant server; must be a valid URL. Under Compose this will be `http://qdrant:6333`. |
+| `QDRANT_API_KEY` | unset | Kept secret in logs and reprs. |
+| `QDRANT_ALIAS` | `provisions` | The name the app queries; versioned collections are `<alias>_v<N>`. |
+
+`EmbeddingSettings` in `src/myapp/vectordb/encoders.py` reads the `EMBED_` prefix.
+Changing the model is a setting change plus a rebuild into a new collection version.
+
+| Variable | Default | Meaning and validation |
+| -------- | ------- | ---------------------- |
+| `EMBED_DENSE_MODEL` | `BAAI/bge-small-en-v1.5` | Dense model (fastembed, ONNX, no PyTorch). The collection's vector size is read from the model. |
+| `EMBED_SPARSE_MODEL` | `Qdrant/bm25` | Sparse keyword model; Qdrant applies IDF at query time. |
+| `EMBED_CACHE_DIR` | unset | Where model weights are cached; a volume under Docker. |
+| `EMBED_BATCH_SIZE` | `64` | Must be positive. |
+
+`SearchSettings` in `src/myapp/vectordb/search.py` reads the `SEARCH_` prefix.
+
+| Variable | Default | Meaning and validation |
+| -------- | ------- | ---------------------- |
+| `SEARCH_K` | `3` | Hits returned when the caller gives no `k`; must be positive. |
+| `SEARCH_CANDIDATE_K` | `50` | Candidates each of dense and BM25 contributes before fusion. |
+| `SEARCH_MIN_RELEVANCE` | `0.0` | Drop hits whose cosine to the question is below this; 0 is off until tuned on real data. |
+
+The Qdrant payload indexes follow the handoff contract in `docs/ingestion.md`:
+`provision_id`, `source`, `authority`, `status`, `visa_types` (keyword) and
+`valid_from`, `valid_to` (datetime). "In force now" is the filter `valid_to` is
+null.
+
 ### Run against a local model
 
 ```bash
@@ -535,7 +668,12 @@ Assignment_for_6700/
 │   ├── config.py              # typed Settings and ModelSettings from the environment
 │   ├── healthcheck.py         # health check the container runs
 │   ├── model_client.py        # ModelClient protocol, echo and OpenAI-compatible clients
-│   └── main.py                # CLI entry-point placeholder
+│   ├── main.py                # CLI entry-point placeholder
+│   └── vectordb/
+│       ├── collection.py      # QdrantSettings, versions, alias swap, status and activate CLI
+│       ├── encoders.py        # EmbeddingSettings, dense BGE and sparse BM25 encoders
+│       ├── loader.py          # one-off task: catalog.sqlite into the next collection version
+│       └── search.py          # Searcher: hybrid search with date, visa and source filters
 ├── models/digits.joblib       # trained digits classifier loaded at startup
 ├── docs/model-serving.md      # model architecture decision and measurements
 ├── docs/deployment.md         # running the stack on Jetstream2, measurements
@@ -553,7 +691,12 @@ Assignment_for_6700/
     ├── test_healthcheck.py    # container health check exit codes
     ├── test_model_client.py   # client lifecycle and dependency override
     ├── test_openai_client.py  # model settings, HTTP client, error mapping
-    └── test_ready.py          # /ready endpoint and the client ping
+    ├── test_ready.py          # /ready endpoint and the client ping
+    └── vectordb/
+        ├── catalog_schema.sql # minimal catalog tables the loader reads
+        ├── conftest.py        # bag-of-words fake encoder and fixture catalog builder
+        ├── test_loader.py     # loader against a fixture catalog and in-memory Qdrant
+        └── test_search.py     # ranking, date, visa, source and proposed-rule filters
 ```
 
 ### Continuous integration
@@ -581,6 +724,16 @@ A failure at any step fails the run. See results under the repository's
 - **Language model in its own container.** The weights (1.1 GB) stay in a volume
   instead of the app image, and we can switch models with env vars without
   rebuilding.
+- **Versioned collections behind an alias.** A rebuild (new embedding model, new
+  chunking) goes into `provisions_v<N+1>` beside the live one, and the alias moves in
+  one step. Rolling back the app image does not roll back vectors, so a rollback
+  moves the alias back instead. Old collections are deleted last.
+- **Dense and sparse vectors in one collection.** Exact terms like "I-983" or
+  "cap-gap" need keyword matching, and keeping both in Qdrant means the same
+  metadata filters apply to both before fusion.
+- **The catalog is the source of truth.** Qdrant is derived from `catalog.sqlite`
+  and can be rebuilt from it at any time. Point ids are UUIDv5 of provision, version
+  and chunk, so reloading updates in place instead of duplicating.
 - **Quality gates in two places.** pre-commit stops problems before they are
   committed; CI enforces the same checks for everyone, so the main branch stays
   green.
@@ -592,6 +745,12 @@ A failure at any step fails the run. See results under the repository's
 - **`uv sync --frozen` fails saying the lockfile is out of date**: someone edited
   `pyproject.toml` without committing `uv.lock`. Run `uv lock`, then commit
   `uv.lock`.
+- **`ModuleNotFoundError: No module named 'myapp'` on macOS** even though it worked
+  before: Python 3.13 skips `.pth` files that macOS flags as hidden, which happens to
+  projects inside an iCloud-synced Desktop or Documents folder. Check with
+  `ls -lO .venv/lib/python3.13/site-packages/*.pth`. Quick fix:
+  `chflags nohidden .venv/lib/python3.13/site-packages/*.pth`. Lasting fix: keep the
+  clone outside the synced folders, then `rm -rf .venv && uv sync --extra dev`.
 - **Port 8000 already in use**: add `--port 8001` to the run command.
 - **`/ready` or `/generate` gives 503**: the model server isn't ready yet. Check
   `docker compose ps` (the first start has to download the model).
