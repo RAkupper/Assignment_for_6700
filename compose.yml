@@ -16,8 +16,9 @@
 # Ingestion output, Qdrant storage and the embedding model cache live under
 # DATA_VOLUME_DIR: the 20 GB Jetstream2 volume on TEAM02 (set it in .env), or
 # ./volume on a laptop. The root disk is almost full, so nothing big goes there.
-# On TEAM02, Docker's own data (images, the llm-models volume) also lives on the
-# volume; see "Data volume" in docs/deployment.md.
+# On TEAM02, Docker's own data (images in /var/lib/containerd, the llm-models
+# volume in /var/lib/docker) is bind-mounted from the volume too; see "Data volume"
+# in docs/deployment.md.
 
 services:
   llm:

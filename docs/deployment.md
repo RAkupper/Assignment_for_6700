@@ -55,69 +55,95 @@ volume; later starts reuse them. `app` starts once `llm` reports healthy.
 
 ## Data volume (first time only)
 
-The root disk is 20 GB and Docker alone filled most of it. Everything large goes on
-the 40 GB volume `team02-data`: Docker's images and the `llm-models` volume,
-ingestion data, Qdrant storage and the embedding models.
+The root disk is 20 GB and Docker filled most of it. Everything large goes on the
+40 GB volume `team02-data`: Docker's images and volumes, ingestion data, Qdrant
+storage and the embedding models. Done on TEAM02 on Oct 28; repeat only for a new
+instance or volume.
+
+TEAM02 uses Docker's containerd image store, so images live in `/var/lib/containerd`
+and volumes in `/var/lib/docker`. Both move. Exosphere's own automount is replaced
+because it mounts after boot, too late for Docker to wait on, and with
+`nosuid,nodev`, which can break setuid binaries in containers.
 
 1. In Exosphere: **Create → Volume**, name `team02-data`, 40 GB, then **Attach** it
-   to TEAM02 (unshelve first). Check the mount on the instance:
+   to TEAM02 (unshelve first).
+
+2. Over SSH, not the web shell (the web shell runs in Docker). Mount the volume from
+   fstab instead of Exosphere's automount. Check the device name with `lsblk` and
+   the UUID with `sudo blkid /dev/sdb`:
 
    ```bash
    V=/media/volume/team02-data
-   df -h $V
-   ```
-
-2. Move Docker's data onto the volume. Look at `/etc/docker/daemon.json` first; if
-   it already has settings, add the `data-root` key to them instead of replacing
-   the file.
-
-   ```bash
-   cat /etc/docker/daemon.json
-   sudo systemctl stop docker docker.socket
-   sudo rsync -aHX /var/lib/docker/ $V/docker/
-   echo "{\"data-root\": \"$V/docker\"}" | sudo tee /etc/docker/daemon.json
-   ```
-
-3. Make Docker wait for the volume at boot. Without this, an unshelve that mounts
-   the volume late starts Docker on an empty folder on the root disk.
-
-   ```bash
-   sudo mkdir -p /etc/systemd/system/docker.service.d
-   printf '[Unit]\nRequiresMountsFor=%s\n' $V | sudo tee /etc/systemd/system/docker.service.d/volume.conf
+   docker compose down
+   sudo cp /etc/fstab /etc/fstab.bak
+   sudo systemctl stop automount-volume@sdb.service
+   sudo systemctl mask automount-volume@sdb.service
+   echo "UUID=<uuid> $V ext4 defaults,nofail,x-systemd.device-timeout=90s 0 2" | sudo tee -a /etc/fstab
    sudo systemctl daemon-reload
-   sudo systemctl start docker
-   docker info --format '{{.DockerRootDir}}'   # must print $V/docker
-   docker compose ps                           # images and llm-models still there
+   sudo mkdir -p $V && sudo mount $V
+   findmnt -no SOURCE,OPTIONS -M $V   # /dev/sdb rw,relatime
    ```
 
-   Only once both checks pass, free the old copy: `sudo rm -rf /var/lib/docker`.
+3. Copy Docker and containerd onto the volume and bind-mount them back. The old
+   folders are renamed, not deleted, until the reboot test passes.
 
-4. Make the app's folders. The app runs as UID 10001, so it needs to own the two
-   it writes to:
+   ```bash
+   sudo systemctl stop docker docker.socket containerd
+   sudo rsync -aHAX --numeric-ids /var/lib/containerd/ $V/containerd/
+   sudo rsync -aHAX --numeric-ids /var/lib/docker/ $V/docker/
+   sudo mv /var/lib/containerd /var/lib/containerd.old
+   sudo mv /var/lib/docker /var/lib/docker.old
+   sudo mkdir /var/lib/containerd /var/lib/docker
+   printf '%s\n' \
+     "$V/containerd /var/lib/containerd none bind,nofail,x-systemd.requires-mounts-for=$V 0 0" \
+     "$V/docker /var/lib/docker none bind,nofail,x-systemd.requires-mounts-for=$V 0 0" \
+     | sudo tee -a /etc/fstab
+   sudo mkdir -p /etc/systemd/system/containerd.service.d /etc/systemd/system/docker.service.d
+   printf '[Unit]\nRequiresMountsFor=/var/lib/containerd\n' | sudo tee /etc/systemd/system/containerd.service.d/volume.conf
+   printf '[Unit]\nRequiresMountsFor=/var/lib/docker /var/lib/containerd\n' | sudo tee /etc/systemd/system/docker.service.d/volume.conf
+   sudo systemctl daemon-reload
+   sudo mount /var/lib/containerd && sudo mount /var/lib/docker
+   sudo systemctl start containerd docker
+   docker images && docker volume ls   # images and llm-models still there
+   ```
+
+4. Make the app's folders and point Compose at the volume. The app runs as UID
+   10001, so it owns the two it writes to:
 
    ```bash
    sudo mkdir -p $V/data $V/embed-cache $V/qdrant $V/qdrant-snapshots
    sudo chown -R 10001:10001 $V/data $V/embed-cache
-   ```
-
-5. Point Compose at it in the untracked `.env` next to `compose.yml`, then start:
-
-   ```bash
    echo "DATA_VOLUME_DIR=$V" >> .env
    docker compose config | grep -c "$V"   # nonzero, or .env is not being read
    docker compose up -d
    ```
 
-Without `DATA_VOLUME_DIR`, Compose uses `./volume` in the clone. That is fine on a
-laptop but puts everything on the root disk on TEAM02.
+5. Reboot test, then free the root disk:
+
+   ```bash
+   sudo reboot
+   # after reconnecting:
+   for p in $V /var/lib/docker /var/lib/containerd; do findmnt -no SOURCE,OPTIONS -M $p; done
+   ls /media/volume                       # only team02-data, no team02-data-sdb
+   curl -s localhost:8000/ready
+   sudo rm -rf /var/lib/docker.old /var/lib/containerd.old ./volume
+   ```
+
+Docker and containerd will not start unless the volume is mounted, so a missing
+volume stops the stack instead of filling the root disk. Without `DATA_VOLUME_DIR`,
+Compose uses `./volume` in the clone. That is fine on a laptop but puts data on the
+root disk on TEAM02.
 
 | On the volume | Mounted at | Used by |
 | --- | --- | --- |
-| `docker/` | Docker's data-root | images, containers, `llm-models` (~1.1 GB) |
+| `containerd/` | `/var/lib/containerd` | image layers (~3.6 GB) |
+| `docker/` | `/var/lib/docker` | containers, `llm-models` (~1.1 GB) |
 | `data/` | `/data` | jobs: raw downloads, manual captures, `catalog.sqlite` |
 | `embed-cache/` | `/embed-cache` | app and jobs: BGE and BM25 models (~70 MB) |
 | `qdrant/` | `/qdrant/storage` | qdrant |
 | `qdrant-snapshots/` | `/qdrant/snapshots` | qdrant snapshots |
+
+Measured Oct 28: root disk went from 2.8 GB to 7.5 GB free; the volume holds 4.3 GB.
 
 ## Resource limits
 
@@ -211,7 +237,7 @@ LLM_MODEL=Qwen/Qwen2.5-14B-Instruct-AWQ
 | `/generate` or `/ready` returns 503 | The llm container is not ready. Check `docker compose ps` and `docker compose logs llm`. |
 | `app` keeps restarting | Usually a config error at startup. `docker compose logs app` shows which setting failed validation, e.g. a missing `models/digits.joblib`. |
 | Build fails with "no space left on device" | Check `df -h /`; remove old images with `docker image prune`. Do not delete the `llm-models` volume unless you want to download the model again. |
-| Docker does not start after an unshelve | The volume is not attached or mounted, so the `RequiresMountsFor` rule holds Docker back. Check **Volumes** in Exosphere and `df -h /media/volume/team02-data`, then `sudo systemctl start docker`. |
+| Docker does not start after an unshelve | The volume is not attached or not mounted, so the `RequiresMountsFor` rules hold Docker and containerd back. Check **Volumes** in Exosphere, then `sudo mount -a && sudo systemctl start containerd docker`. If the volume was reattached under a new device name (`lsblk`), mask `automount-volume@<name>.service` too. |
 | `app` never starts, `qdrant` is unhealthy | `docker compose logs qdrant`. Usually the volume is not mounted or `DATA_VOLUME_DIR` in `.env` is wrong. |
 | `PermissionError` under `/data` or `/embed-cache` | The folders on the volume belong to root. Run the `chown` from [Data volume](#data-volume-first-time-only). |
 
