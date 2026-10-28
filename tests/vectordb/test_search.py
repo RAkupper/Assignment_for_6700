@@ -81,7 +81,9 @@ def searcher(tmp_path_factory: pytest.TempPathFactory) -> Searcher:
     with warnings.catch_warnings():  # payload indexes are a no-op locally
         warnings.simplefilter("ignore", UserWarning)
         build(client, FakeEncoder(), catalog, "provisions", activate=True)
-    return Searcher(client, FakeEncoder(), "provisions")
+    return Searcher(  # fake vectors, so the tuned cutoff does not apply
+        client, FakeEncoder(), "provisions", SearchSettings(min_relevance=0.0)
+    )
 
 
 def ids(hits: list[Hit]) -> list[str]:
@@ -100,6 +102,7 @@ def test_returns_k_hits_in_the_agreed_shape(searcher: Searcher) -> None:
         "score",
         "relevance",
         "heading_path",
+        "parent_text",
         "text",
         "source",
         "authority",

@@ -101,6 +101,9 @@ class IngestSettings(BaseSettings):
         "https://www.federalregister.gov/api/v1"
     )
     federal_register_since: date = date(2020, 1, 1)  # first backfill only
+    ecfr_since: date = date(
+        2020, 1, 1
+    )  # history window start; one snapshot per amendment
     user_agent: str = Field(
         default="dsan6700-ingest (Georgetown DSAN student project)", min_length=1
     )

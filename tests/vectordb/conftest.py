@@ -2,15 +2,15 @@
 
 import hashlib
 import re
-import sqlite3
 from collections.abc import Sequence
+from contextlib import closing
 from pathlib import Path
 
 from qdrant_client import models
 
+from myapp.ingest.catalog import connect, migrate
 from myapp.vectordb.encoders import Encoded
 
-SCHEMA = Path(__file__).with_name("catalog_schema.sql")
 DIM = 64  # wide enough that few words share a slot
 
 
@@ -47,10 +47,10 @@ class FakeEncoder:
         return _encode(text)
 
 
-Provision = tuple[str, str, str, str, str]  # id, source, heading, authority, visas
+Provision = tuple[str, ...]  # id, source, heading_path, authority, visas[, parent]
 Version = tuple[
-    str, int, str, str, str, str | None
-]  # id, version, text, status, from, to
+    str, int, str, str, str | None, str | None
+]  # id, v, text, status, from, to
 
 
 def make_catalog(
@@ -59,18 +59,40 @@ def make_catalog(
     versions: list[Version],
     failed: list[Version] | None = None,
 ) -> Path:
-    """A catalog with one succeeded run, plus an optional failed one."""
-    with sqlite3.connect(path) as con:
-        con.executescript(SCHEMA.read_text())
+    """A catalog built by the real migrations: one good parse run, one failed one."""
+    migrate(path, path.parent / "backups")
+    with closing(connect(path)) as con:
         con.executemany(
-            "INSERT INTO runs VALUES (?, ?, ?)",
-            [(1, "ecfr", "succeeded"), (2, "ecfr", "failed")],
+            "INSERT INTO runs (run_id, source, command, started_at, status) "
+            "VALUES (?, 'ecfr', ?, 'now', ?)",
+            [
+                (1, "fetch", "succeeded"),
+                (2, "parse", "succeeded"),
+                (3, "parse", "failed"),
+            ],
         )
-        con.executemany("INSERT INTO fetches VALUES (?, ?)", [(10, 1), (20, 2)])
-        con.executemany("INSERT INTO provisions VALUES (?, ?, ?, ?, ?)", provisions)
+        con.executemany(
+            "INSERT INTO fetches (fetch_id, run_id, url, fetched_at, accepted, "
+            "parsed_by_run) VALUES (?, 1, ?, 'now', 1, ?)",
+            [(10, "https://example.test/a", 2), (20, "https://example.test/b", 3)],
+        )
+        con.executemany(
+            "INSERT INTO provisions (provision_id, source, parent_id, ordinal, "
+            "heading_path, authority, visa_types) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            [
+                (p[0], p[1], p[5] if len(p) > 5 else None, i, p[2], p[3], p[4])
+                for i, p in enumerate(provisions)
+            ],
+        )
         rows = [(*v, 10) for v in versions] + [(*v, 20) for v in failed or []]
         con.executemany(
-            "INSERT INTO provision_versions VALUES (?, ?, ?, ?, ?, ?, ?)", rows
+            "INSERT INTO provision_versions (provision_id, version, text, "
+            "content_hash, status, valid_from, valid_to, fetch_id) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            [
+                (r[0], r[1], r[2], hashlib.sha256(r[2].encode()).hexdigest(), *r[3:])
+                for r in rows
+            ],
         )
-    con.close()
+        con.commit()
     return path
