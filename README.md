@@ -1,6 +1,8 @@
 # Assignment_for_6700
 
-RAG prototype: see [the short startup guide](docs/rag-quickstart.md).
+RAG prototype: `/ask` now connects the team's `vectordb` retrieval to the new
+`generation` module and the existing model client. See the
+[short startup guide](docs/rag-quickstart.md) for `compose.rag.yml` and real catalog loading.
 
 An installable FastAPI service skeleton for our course ML inference API. This week it
 exposes a typed `/health` endpoint; later assignments will put a model behind it.
@@ -282,7 +284,9 @@ use [Compose](#deploy-with-compose) for the full thing.
 
 Retrieval reads from a Qdrant collection built from `data/catalog.sqlite` (see
 [docs/ingestion.md](docs/ingestion.md) for the catalog and the handoff contract).
-Compose integration is not done yet, so for now Qdrant runs as its own container.
+For the complete API + Qdrant + Ollama stack, use `compose.rag.yml` as described in
+[the RAG guide](docs/rag-quickstart.md). The standalone commands below remain useful
+for developing the retrieval module locally.
 
 ### 1. Start Qdrant locally
 
@@ -597,8 +601,10 @@ LLM_PROVIDER=openai uv run python scripts/bench_model.py   # latency check
 | Method | Path      | Response model   | Description                              |
 | ------ | --------- | ---------------- | ---------------------------------------- |
 | GET    | `/health` | `HealthResponse` | Liveness check with service version     |
-| GET    | `/ready` | `ReadyResponse` | Readiness check: the model server answers (`503`/`504` if not) |
+| GET    | `/ready` | `ReadyResponse` | Configured model and enabled retrieval dependencies |
 | POST   | `/generate` | `GenerateResponse` | Model completion for a prompt |
+| POST   | `/retrieve` | `list[Hit]` | Team hybrid retrieval; generation must be enabled |
+| POST   | `/ask` | `Answer` | Retrieved evidence → LLM answer with sources |
 | POST   | `/predict` | `PredictResponse` | Digit (0 to 9) for 64 pixel values (0 to 16) |
 | GET    | `/docs`   | HTML             | Auto-generated Swagger UI (FastAPI)      |
 
@@ -610,9 +616,17 @@ LLM_PROVIDER=openai uv run python scripts/bench_model.py   # latency check
 | `version` | `str`         | `"0.1.0"` |
 
 `/health` only says the app process is up, so a container can use it as a liveness
-probe without depending on the model. `/ready` also checks that the model server
-answers (a cheap `GET` on its `/models` listing, bounded by
-`LLM_CONNECT_TIMEOUT_S`), so use it to see whether `/generate` can work:
+probe without depending on the model. `/ready` checks that the configured model
+appears in `/models`, using `LLM_CONNECT_TIMEOUT_S` for the request timeout.
+When `GENERATION_ENABLED=true`, it also requires an initialized encoder and an
+activated, nonempty Qdrant index with matching dense/sparse configuration and
+embedding model. It reads a single evidence record without logging its text.
+These checks do not generate answers, run embeddings, download models, or load data.
+Missing dependencies return 503, model-list timeouts 504, and malformed model
+listings 502; `/health` remains available. Success remains `{"status":"ready"}`.
+With generation disabled, only the configured model is checked; the development
+echo backend remains usable in that mode. Generation readiness rejects echo.
+Readiness is a dependency probe, not a replacement for a real-model smoke test:
 
 ```bash
 curl http://127.0.0.1:8000/ready
@@ -621,6 +635,12 @@ curl http://127.0.0.1:8000/ready
 `POST /generate` takes a `GenerateRequest` body and returns a `GenerateResponse`.
 The model call runs in a worker thread, so `/health` keeps answering while a slow
 generation is in flight.
+
+`POST /ask` accepts `question` and optional `k`, `as_of`, `visa_type`, `sources`,
+and `include_proposed`. It returns `answer` and `sources`; citation `[1]` refers to
+the first source. `POST /retrieve` accepts the same request and returns passages
+without generating. Enable `GENERATION_ENABLED=true` at startup (already set by
+RAG Compose). See the [RAG guide](docs/rag-quickstart.md) for configuration and examples.
 
 | Model | Field | Type | Validation or example |
 | --- | --- | --- | --- |
@@ -661,6 +681,7 @@ Assignment_for_6700/
 ├── .python-version            # Python 3.13, read by uv and CI
 ├── Dockerfile                 # app image: uv sync --frozen, non-root, HEALTHCHECK
 ├── compose.yml                # app + llama.cpp model server, named volume, restarts
+├── compose.rag.yml            # app + team retrieval + Ollama + Qdrant
 ├── discussion.md              # blocking-call audit: step table and measurements
 ├── pyproject.toml             # metadata, dependencies, tool config
 ├── uv.lock                    # pinned, shared environment
@@ -671,6 +692,10 @@ Assignment_for_6700/
 │   ├── healthcheck.py         # health check the container runs
 │   ├── model_client.py        # ModelClient protocol, echo and OpenAI-compatible clients
 │   ├── main.py                # CLI entry-point placeholder
+│   ├── ingest/                # source protocol and validated ingestion records
+│   ├── generation/
+│   │   ├── schemas.py        # QuestionRequest and Answer
+│   │   └── service.py        # GenerationSettings; Searcher → prompt → existing LLM client
 │   └── vectordb/
 │       ├── collection.py      # QdrantSettings, versions, alias swap, status and activate CLI
 │       ├── encoders.py        # EmbeddingSettings, dense BGE and sparse BM25 encoders
@@ -694,6 +719,7 @@ Assignment_for_6700/
     ├── test_model_client.py   # client lifecycle and dependency override
     ├── test_openai_client.py  # model settings, HTTP client, error mapping
     ├── test_ready.py          # /ready endpoint and the client ping
+    ├── generation/            # API + actual loader/searcher integration, fake inference
     └── vectordb/
         ├── catalog_schema.sql # minimal catalog tables the loader reads
         ├── conftest.py        # bag-of-words fake encoder and fixture catalog builder
