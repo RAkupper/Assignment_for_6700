@@ -30,3 +30,4 @@ Assignment_for_6700/
 .pytest_cache
 .mypy_cache
 .ruff_cache
+data/
