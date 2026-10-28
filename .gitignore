@@ -44,6 +44,9 @@ coverage.xml
 # Scratch
 _to_delete/
 
+# Compose bind mounts on a laptop (DATA_VOLUME_DIR default)
+volume/
+
 # Local config files
 .env
 .env.*

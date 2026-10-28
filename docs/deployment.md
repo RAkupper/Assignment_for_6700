@@ -6,15 +6,19 @@ do when something breaks. The stack is defined in [`compose.yml`](../compose.yml
 ## What runs where
 
 ```text
-TEAM02 (Jetstream2 m3.small: 2 vCPUs, 6 GB RAM, 20 GB disk)
+TEAM02 (Jetstream2 m3.small: 2 vCPUs, 6 GB RAM, 20 GB disk + 20 GB volume)
 ├── app   container, port 8000 (public)
 │     ├── GET  /health    the app process is up
 │     ├── GET  /ready     the LLM server answers
 │     ├── POST /predict   digits classifier (scikit-learn), loaded inside the app
 │     └── POST /generate  asks the llm container over the compose network
-└── llm   container, port 8080 (internal only)
-      └── llama.cpp server with Qwen2.5-1.5B-Instruct (Q4_K_M)
-          weights in the named volume llm-models
+├── llm   container, port 8080 (internal only)
+│     └── llama.cpp server with Qwen2.5-1.5B-Instruct (Q4_K_M)
+│         weights in the named volume llm-models
+├── qdrant container, port 6333 (internal only)
+│     └── vector database for retrieval, storage on the 20 GB volume
+└── jobs  one-off container (docker compose run), same image as app
+      └── ingestion and Qdrant loading, writes /data on the 20 GB volume
 ```
 
 - The digits model is a 91 KB file (`models/digits.joblib`) that ships inside the
@@ -49,6 +53,58 @@ TEAM02 (Jetstream2 m3.small: 2 vCPUs, 6 GB RAM, 20 GB disk)
 The first start downloads the model weights (1.1 GB) into the `llm-models`
 volume; later starts reuse them. `app` starts once `llm` reports healthy.
 
+## Data volume (first time only)
+
+The root disk is almost full, so ingestion data, Qdrant storage and the embedding
+models go on a separate 20 GB Jetstream2 volume.
+
+1. In Exosphere: **Create → Volume**, 20 GB, then **Attach** it to TEAM02. Exosphere
+   mounts it at `/media/volume/<volume-name>`; `df -h | grep volume` shows the path.
+2. On the instance, make the folders. The app runs as UID 10001, so it needs to own
+   the two it writes to:
+
+   ```bash
+   V=/media/volume/<volume-name>
+   sudo mkdir -p $V/data $V/embed-cache $V/qdrant $V/qdrant-snapshots
+   sudo chown -R 10001:10001 $V/data $V/embed-cache
+   ```
+
+3. Point Compose at it in the untracked `.env` next to `compose.yml`, then start:
+
+   ```bash
+   echo "DATA_VOLUME_DIR=$V" >> .env
+   docker compose up -d
+   ```
+
+Without `DATA_VOLUME_DIR`, Compose uses `./volume` in the clone. That is fine on a
+laptop but puts everything on the root disk on TEAM02.
+
+| Folder on the volume | Mounted at | Used by |
+| --- | --- | --- |
+| `data/` | `/data` | jobs: raw downloads, manual captures, `catalog.sqlite` |
+| `embed-cache/` | `/embed-cache` | app and jobs: BGE and BM25 models (~70 MB) |
+| `qdrant/` | `/qdrant/storage` | qdrant |
+| `qdrant-snapshots/` | `/qdrant/snapshots` | qdrant snapshots |
+
+## Load the regulations into Qdrant
+
+Ingestion and loading are one-off jobs, never part of app startup (see
+[ingestion.md](ingestion.md)). They need the ingestion and Qdrant PRs (#31, #33, #35)
+on main.
+
+```bash
+docker compose run --rm jobs python -m myapp.ingest.catalog migrate
+docker compose run --rm jobs python -m myapp.ingest fetch --part "8 CFR 214"
+docker compose run --rm jobs python -m myapp.ingest parse --part "8 CFR 214"
+docker compose run --rm jobs python -m myapp.vectordb.loader --catalog /data/catalog.sqlite --activate
+docker compose run --rm jobs python -m myapp.vectordb.search "Can I work on campus?" --visa F-1
+```
+
+`run` starts qdrant first if it is not up. Pass `--catalog` to the loader: its default
+is relative to the working directory, not `/data`. The loader builds a new collection
+and moves the `provisions` alias to it. To roll back, move the alias back:
+`docker compose run --rm jobs python -m myapp.vectordb.collection activate provisions_v1`.
+
 ## Check it from your laptop
 
 ```bash
@@ -65,6 +121,12 @@ curl -X POST http://<public-ip>:8000/predict \
 The `/predict` example is a handwritten 3 from scikit-learn's digits dataset, so
 the answer should be `{"digit":3}`.
 
+Qdrant must not answer from outside. This should time out or be refused:
+
+```bash
+curl -m 5 http://<public-ip>:6333/
+```
+
 ## Everyday commands (on the instance, in `~/Assignment_for_6700`)
 
 | Task | Command |
@@ -74,6 +136,7 @@ the answer should be `{"digit":3}`.
 | Pull new code and rebuild the app | `git pull && docker compose up -d --build` |
 | Stop the stack (keeps the model volume) | `docker compose down` |
 | Disk usage | `docker system df` and `df -h /` |
+| Qdrant collections and point counts | `docker compose run --rm jobs python -m myapp.vectordb.collection status` |
 
 Shelve TEAM02 in Exosphere when you are done, and say so in the group chat first so
 you don't cut off someone who is testing. Both containers use
@@ -105,6 +168,8 @@ LLM_MODEL=Qwen/Qwen2.5-14B-Instruct-AWQ
 | `/generate` or `/ready` returns 503 | The llm container is not ready. Check `docker compose ps` and `docker compose logs llm`. |
 | `app` keeps restarting | Usually a config error at startup. `docker compose logs app` shows which setting failed validation, e.g. a missing `models/digits.joblib`. |
 | Build fails with "no space left on device" | Check `df -h /`; remove old images with `docker image prune`. Do not delete the `llm-models` volume unless you want to download the model again. |
+| `app` never starts, `qdrant` is unhealthy | `docker compose logs qdrant`. Usually the volume is not mounted or `DATA_VOLUME_DIR` in `.env` is wrong. |
+| `PermissionError` under `/data` or `/embed-cache` | The folders on the volume belong to root. Run the `chown` from [Data volume](#data-volume-first-time-only). |
 
 ## Measured on TEAM02
 
