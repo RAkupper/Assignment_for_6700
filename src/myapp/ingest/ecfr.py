@@ -1,12 +1,14 @@
 """eCFR source: one full-part snapshot per amendment date since the window start."""
 
+import re
 import xml.etree.ElementTree as ET
 from collections.abc import Callable, Iterator
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
 from myapp.config import IngestSettings
+from myapp.ingest.ecfr_parse import ParseReport, parse_part, with_text
 from myapp.ingest.http import PoliteClient
-from myapp.ingest.schema import RawDocument, Record, SourceName
+from myapp.ingest.schema import RawDocument, Record, RecordMetadata, SourceName
 
 MIN_BYTES = 1_000
 BOT_MARKERS = (b"<html", b"captcha", b"access denied", b"request blocked")
@@ -88,4 +90,36 @@ class EcfrSource:
         return None
 
     def parse(self, raw: RawDocument) -> Iterator[Record]:
-        raise NotImplementedError("section 3")
+        return records(raw, parse_part(raw.body, self.title))
+
+
+def provision_url(provision_id: str, day: str) -> str:
+    """Link to the paragraph in the eCFR as it read on `day`."""
+    match = re.match(r'(\d+) CFR ([\d.a-z-]+)(\([^ "#]*\))?', provision_id)
+    if match is None:
+        return f"https://www.ecfr.gov/on/{day}"
+    title, section, paragraph = match.groups()
+    anchor = f"#p-{section}{paragraph}" if paragraph else ""
+    return f"https://www.ecfr.gov/on/{day}/title-{title}/section-{section}{anchor}"
+
+
+def records(raw: RawDocument, report: ParseReport) -> Iterator[Record]:
+    day = raw.source_version or raw.retrieved_at.date().isoformat()
+    for p in with_text(report):
+        yield Record(
+            metadata=RecordMetadata(
+                source="ecfr",
+                provision_id=p.provision_id,
+                parent_id=p.parent_id,
+                heading=p.heading,
+                heading_path=p.heading_path,
+                authority="regulation",
+                status="in_force",
+                valid_from=date.fromisoformat(day),
+                url=provision_url(p.provision_id, day),  # type: ignore[arg-type]
+                retrieved_at=raw.retrieved_at,
+                visa_types=frozenset(p.visa_types),  # type: ignore[arg-type]
+                visa_types_rule=p.visa_types_rule,
+            ),
+            text=p.text,
+        )
