@@ -1,5 +1,7 @@
 # Assignment_for_6700
 
+RAG prototype: see [the short startup guide](docs/rag-quickstart.md).
+
 An installable FastAPI service skeleton for our course ML inference API. This week it
 exposes a typed `/health` endpoint; later assignments will put a model behind it.
 

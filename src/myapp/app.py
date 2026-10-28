@@ -2,16 +2,16 @@
 
 import asyncio
 import time
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Iterator
 from contextlib import asynccontextmanager
 from typing import Annotated, Literal
 
 import joblib  # type: ignore[import-untyped]  # joblib does not ship type information.
-from fastapi import Depends, FastAPI, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
-from myapp.config import Settings
+from myapp.config import RagSettings, Settings
 from myapp.model_client import (
     ModelClient,
     ModelClientError,
@@ -19,8 +19,10 @@ from myapp.model_client import (
     ModelUnavailableError,
     build_model_client,
 )
+from myapp.rag import Answer, Hit, RagService
 
 settings = Settings()
+rag_settings = RagSettings()
 
 
 @asynccontextmanager
@@ -126,6 +128,40 @@ class GenerateResponse(BaseModel):
     """Text the model returned for a prompt."""
 
     completion: str
+
+
+def get_rag_service() -> Iterator[RagService]:
+    if not rag_settings.enabled:
+        raise HTTPException(status_code=503, detail="RAG disabled; use compose.rag.yml")
+    service = RagService(rag_settings)
+    try:
+        yield service
+    finally:
+        service.close()
+
+
+class QuestionRequest(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+    question: str = Field(min_length=1, max_length=1000)
+
+
+@app.post("/retrieve", response_model=list[Hit])
+def retrieve(
+    body: QuestionRequest,
+    rag: Annotated[RagService, Depends(get_rag_service)],
+) -> list[Hit]:
+    """Inspect retrieved passages before involving generation."""
+    return rag.retrieve(body.question)
+
+
+@app.post("/ask", response_model=Answer)
+def ask(
+    body: QuestionRequest,
+    rag: Annotated[RagService, Depends(get_rag_service)],
+    model: Annotated[ModelClient, Depends(get_model_client)],
+) -> Answer:
+    """Retrieve evidence and generate an answer in FastAPI's worker thread."""
+    return rag.ask(body.question, model)
 
 
 @app.post("/generate", response_model=GenerateResponse)

@@ -30,4 +30,6 @@ Assignment_for_6700/
 .pytest_cache
 .mypy_cache
 .ruff_cache
+
+# Data is supplied at runtime, not included in the application image
 data/
