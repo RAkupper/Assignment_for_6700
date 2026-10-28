@@ -207,8 +207,9 @@ What the loader is expected to do:
 - **Chunks never cross provision boundaries.** A long provision may split into several
   chunks; a chunk never mixes two provisions, so every answer cites one exact paragraph.
 
-Deployment: a `qdrant` service in `compose.yml` with a named volume, as in the Docker
-lecture.
+Deployment: a `qdrant` service in `compose.yml` (#37). Its storage, `/data`, and the
+embedding cache are bind mounts under `DATA_VOLUME_DIR`, the 20 GB Jetstream2 volume,
+not named volumes: those live on TEAM02's root disk, which has ~3.7 GB free.
 
 ## Manually captured sources
 
