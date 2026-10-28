@@ -128,6 +128,7 @@ class GenerationService:
                 "citation": f"[{number}]",
                 "provision_id": hit.provision_id,
                 "heading_path": hit.heading_path,
+                "parent_text": hit.parent_text,
                 "source": hit.source,
                 "authority": hit.authority,
                 "status_today": hit.status,

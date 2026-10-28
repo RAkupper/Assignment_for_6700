@@ -580,7 +580,7 @@ Changing the model is a setting change plus a rebuild into a new collection vers
 | -------- | ------- | ---------------------- |
 | `SEARCH_K` | `3` | Hits returned when the caller gives no `k`; must be positive. |
 | `SEARCH_CANDIDATE_K` | `50` | Candidates each of dense and BM25 contributes before fusion. |
-| `SEARCH_MIN_RELEVANCE` | `0.0` | Drop hits whose cosine to the question is below this; 0 is off until tuned on real data. |
+| `SEARCH_MIN_RELEVANCE` | `0.65` | Drop hits whose cosine to the question is below this. Tuned on 8 CFR 214: correct hits scored 0.66 to 0.85, off-topic questions mostly below 0.65. Set 0 to turn it off. |
 
 The Qdrant payload indexes follow the handoff contract in `docs/ingestion.md`:
 `provision_id`, `source`, `authority`, `status`, `visa_types` (keyword) and

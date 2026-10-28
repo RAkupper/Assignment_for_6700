@@ -20,7 +20,7 @@ from myapp.app import app, get_generation_service, get_model_client
 from myapp.generation.schemas import QuestionRequest
 from myapp.generation.service import GenerationService, GenerationSettings
 from myapp.model_client import EchoModelClient, ModelTimeoutError
-from myapp.vectordb.loader import build
+from myapp.vectordb.loader import build, point_id
 from myapp.vectordb.search import Searcher, SearchSettings
 from tests.fakes import FakeModelClient
 from tests.vectordb.conftest import FakeEncoder, make_catalog
@@ -75,7 +75,13 @@ def generation(tmp_path: Path) -> Iterator[GenerationService]:
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", UserWarning)
         build(client, encoder, catalog, "provisions", activate=True)
-    searcher = Searcher(client, encoder, "provisions", SearchSettings(_env_file=None))
+    # The production cutoff is calibrated for BGE, not this bag-of-words fake.
+    searcher = Searcher(
+        client,
+        encoder,
+        "provisions",
+        SearchSettings(_env_file=None, min_relevance=0.0),
+    )
     service = GenerationService(searcher, GenerationSettings(_env_file=None))
     yield service
     service.close()
@@ -120,6 +126,25 @@ def test_ask_retrieves_and_sends_evidence_to_existing_llm(
     assert evidence[0]["citation"] == "[1]"
     assert evidence[0]["text"] == body["sources"][0]["text"]
     assert "Current fixture" in evidence[0]["text"]
+
+
+def test_parent_context_reaches_generation_prompt(
+    api: tuple[TestClient, FakeModelClient],
+    generation: GenerationService,
+) -> None:
+    lead = "Parent fixture: these conditions apply only to enrolled students."
+    generation.searcher.client.set_payload(
+        "provisions_v1",
+        {"parent_text": lead},
+        points=[point_id("TEST-1", 2, 0)],
+        wait=True,
+    )
+    client, model = api
+    response = client.post("/ask", json={"question": "Form I-983", "k": 1})
+    assert response.status_code == 200
+    evidence = json.loads(model.prompts[0].split("Evidence JSON: ", 1)[1])
+    assert evidence[0]["parent_text"] == lead
+    assert response.json()["sources"][0]["parent_text"] == lead
 
 
 def test_retrieve_and_ask_share_filters_and_historical_results(

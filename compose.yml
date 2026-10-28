@@ -1,5 +1,6 @@
-# Service stack: the FastAPI app plus the model server it calls over HTTP.
-# How to start, check and troubleshoot it on Jetstream2: docs/deployment.md
+# Service stack: the FastAPI app, the model server it calls over HTTP, and the
+# Qdrant vector database. How to start, check and troubleshoot it on Jetstream2:
+# docs/deployment.md
 #
 # Fresh clone on the instance:   docker compose up -d
 # Defaults come from .env.production.example (no secrets). Put overrides and any
@@ -11,6 +12,10 @@
 # To use the class model server instead, set in .env:
 #   LLM_BASE_URL=http://10.1.82.181:8000/v1
 #   LLM_MODEL=Qwen/Qwen2.5-14B-Instruct-AWQ
+#
+# Ingestion output, Qdrant storage and the embedding model cache live under
+# DATA_VOLUME_DIR: the 20 GB Jetstream2 volume on TEAM02 (set it in .env), or
+# ./volume on a laptop. The root disk is almost full, so nothing big goes there.
 
 services:
   llm:
@@ -35,6 +40,27 @@ services:
       start_period: 120s
     restart: unless-stopped
 
+  # No "ports": 6333 is reachable only from containers on this network.
+  qdrant:
+    image: qdrant/qdrant:v1.19.2
+    environment:
+      QDRANT__TELEMETRY_DISABLED: "true"
+    volumes:
+      - ${DATA_VOLUME_DIR:-./volume}/qdrant:/qdrant/storage
+      - ${DATA_VOLUME_DIR:-./volume}/qdrant-snapshots:/qdrant/snapshots
+    # The image has no curl, so ask /readyz over bash's /dev/tcp.
+    healthcheck:
+      test:
+        - CMD
+        - bash
+        - -c
+        - exec 3<>/dev/tcp/127.0.0.1/6333 && printf 'GET /readyz HTTP/1.0\r\n\r\n' >&3 && grep -q ' 200 ' <&3
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    restart: unless-stopped
+
   app:
     build: .
     env_file:
@@ -49,12 +75,43 @@ services:
       # 2 vCPUs generate ~25 tokens/s, so long answers under concurrent load
       # would exceed the 120 s client timeout.
       LLM_MAX_TOKENS: ${LLM_MAX_TOKENS:-128}
+      QDRANT_URL: ${QDRANT_URL:-http://qdrant:6333}
+      EMBED_CACHE_DIR: /embed-cache
+    volumes:
+      - ${DATA_VOLUME_DIR:-./volume}/embed-cache:/embed-cache
     ports:
       - "8000:8000"
     depends_on:
       llm:
         condition: service_healthy
+      qdrant:
+        condition: service_healthy
     restart: unless-stopped
+
+  # One-off ingestion and loading tasks, never started by "docker compose up":
+  #   docker compose run --rm jobs python -m myapp.ingest fetch --part "8 CFR 214"
+  # Same image as the app, plus write access to /data.
+  jobs:
+    build: .
+    profiles: [jobs]
+    env_file:
+      - path: .env.production.example
+        required: true
+      - path: .env
+        required: false
+    environment:
+      QDRANT_URL: ${QDRANT_URL:-http://qdrant:6333}
+      INGEST_DATA_DIR: /data
+      EMBED_CACHE_DIR: /embed-cache
+    volumes:
+      - ${DATA_VOLUME_DIR:-./volume}/data:/data
+      - ${DATA_VOLUME_DIR:-./volume}/embed-cache:/embed-cache
+    depends_on:
+      qdrant:
+        condition: service_healthy
+    # The image's health check probes the API on port 8000, which jobs don't run.
+    healthcheck:
+      disable: true
 
 volumes:
   llm-models:

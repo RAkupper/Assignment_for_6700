@@ -50,7 +50,10 @@ Qdrant currently has only a `service_started` dependency in this prototype file.
 If the loader encounters a startup connection error, confirm Qdrant is ready and
 retry. This file does not configure Jetstream2's additional disk: named volumes
 use Docker's storage location, and `./data` belongs to the current checkout.
-The team's separate Compose/data-volume work must be integrated before deployment.
+The merged `compose.yml` also provides the team's Jetstream2/jobs setup with
+`DATA_VOLUME_DIR`. It is a separate stack from this prototype's `compose.rag.yml`;
+their data directories and Qdrant storage are not automatically shared. Select
+the intended stack and storage paths before running ingestion or deployment.
 
 ## API contract
 
@@ -71,7 +74,7 @@ Only `question` is required. Omitted filters use the team's retrieval defaults.
 
 - `/retrieve` returns the team's `Hit` list without calling the LLM.
 - `/ask` returns `answer` and `sources`; citation `[1]` refers to `sources[0]`.
-- Sources include the provision ID, text, source, authority, status, validity dates,
+- Sources include the provision ID, text, parent lead-in, source, authority, status, validity dates,
   `score` (hybrid ranking score), and `relevance` (dense cosine similarity).
 - Generation limits evidence text to a character budget. Returned source text
   matches the excerpts sent to the LLM; `/retrieve` returns full retrieved text.
@@ -129,9 +132,11 @@ Generation integration tests use temporary fixture catalogs, the actual team
 loader/searcher, and in-memory Qdrant. Embedding and LLM inference are replaced by
 test doubles; tests do not download models or require external services.
 
-The loader currently uses one provision version per chunk. The character budget
-does not guarantee an exact token limit. Retrieval thresholds need evaluation on
-real questions; retrieved evidence may still be insufficient. Citations are
+The loader currently uses one provision version per chunk, with parent lead-in
+context also passed to the generation prompt. The character budget
+does not guarantee an exact token limit. `SEARCH_MIN_RELEVANCE` is 0.65, following
+the ingestion PR's evaluation; broader evaluation is still needed and retrieved
+evidence may be insufficient. Citations are
 requested in the prompt but are not automatically verified. Incremental sync and
 snapshots remain unimplemented. Readiness checks model availability and index
 metadata; they do not prove that inference succeeds or answers are accurate.

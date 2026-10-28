@@ -11,7 +11,14 @@ from myapp.vectordb.collection import (
     status,
     versions,
 )
-from myapp.vectordb.loader import build, load, point_id, to_rfc3339
+from myapp.vectordb.loader import (
+    CatalogTooOldError,
+    build,
+    load,
+    point_id,
+    read_chunks,
+    to_rfc3339,
+)
 from tests.vectordb.conftest import DIM, FakeEncoder, make_catalog
 
 OPT = "8 CFR 214.2(f)(10)(ii)"
@@ -44,7 +51,9 @@ def catalog(tmp_path: Path) -> Path:
             (OPT, 2, "Current OPT text.", "in_force", "2024-01-01", None),
             (J1, 1, "Exchange visitor text.", "in_force", "2020-01-01T00:00:00Z", None),
         ],
-        failed=[(J1, 2, "From a failed run.", "in_force", "2026-01-01", None)],
+        failed=[
+            (J1, 2, "From a failed run.", "superseded", "2026-01-01", "2026-02-01")
+        ],
     )
 
 
@@ -148,3 +157,42 @@ def test_partial_build_needs_replace(empty: QdrantClient, catalog: Path) -> None
         _build(empty, catalog, version=1)
     assert _build(empty, catalog, version=1, replace=True) == "provisions_v1"
     assert empty.count("provisions_v1").count == 3
+
+
+def test_parent_lead_in_is_embedded_and_kept(tmp_path: Path) -> None:
+    parent, child = "8 CFR 214.2(f)(1)(ii)", "8 CFR 214.2(f)(1)(ii)(B)"
+    catalog = make_catalog(
+        tmp_path / "catalog.sqlite",
+        provisions=[
+            (parent, "ecfr", "F-1 > I-20 at the port of entry", "regulation", "[]"),
+            (
+                child,
+                "ecfr",
+                "F-1 > I-20 at the port of entry > (B)",
+                "regulation",
+                "[]",
+                parent,
+            ),
+        ],
+        versions=[
+            (parent, 1, "Old lead-in.", "superseded", None, "2024-01-01"),
+            (parent, 2, "The inspecting officer must:", "in_force", "2024-01-01", None),
+            (child, 1, "Endorse the Form I-20; and", "in_force", "2024-01-01", None),
+        ],
+    )
+    chunk = next(c for c in read_chunks(catalog) if c.provision_id == child)
+    assert "The inspecting officer must: Endorse the Form I-20" in chunk.text
+    assert chunk.payload["parent_text"] == "The inspecting officer must:"
+    assert chunk.payload["text"] == "Endorse the Form I-20; and"
+
+
+def test_catalog_older_than_the_loader_is_refused(tmp_path: Path) -> None:
+    import sqlite3
+
+    old = tmp_path / "old.sqlite"
+    with sqlite3.connect(old) as con:
+        con.execute("CREATE TABLE schema_migrations (version INTEGER)")
+        con.execute("INSERT INTO schema_migrations VALUES (1)")
+    con.close()
+    with pytest.raises(CatalogTooOldError, match="migrate"):
+        list(read_chunks(old))
