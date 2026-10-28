@@ -16,31 +16,6 @@ from pydantic import (
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-class RagSettings(BaseSettings):
-    """Retrieval configuration; disabled unless explicitly enabled."""
-
-    model_config = SettingsConfigDict(
-        env_prefix="RAG_", env_file=".env", extra="ignore"
-    )
-    enabled: bool = False
-    catalog_path: Path = Path("data/demo.sqlite")
-    qdrant_url: HttpUrl = HttpUrl("http://localhost:6333")
-    ollama_url: HttpUrl = HttpUrl("http://localhost:11434")
-    embedding_model: str = "all-minilm:22m"
-    collection: str = Field(default="provisions", pattern=r"^[a-zA-Z0-9_-]+$")
-    chunk_chars: int = Field(default=600, ge=100, le=2000)
-    chunk_overlap: int = Field(default=80, ge=0)
-    top_k: int = Field(default=3, ge=1, le=10)
-    min_score: float = Field(default=0.25, ge=-1, le=1)
-    timeout_s: float = Field(default=120, gt=0)
-
-    @model_validator(mode="after")
-    def validate_overlap(self) -> Self:
-        if self.chunk_overlap >= self.chunk_chars:
-            raise ValueError("RAG_CHUNK_OVERLAP must be less than RAG_CHUNK_CHARS")
-        return self
-
-
 # Define typed settings for the model backend
 class ModelSettings(BaseSettings):
     """Where the language model runs and how the service talks to it.
