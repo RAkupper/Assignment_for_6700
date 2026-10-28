@@ -16,7 +16,7 @@ class ModelClient(Protocol):
         ...
 
     def ping(self) -> None:
-        """Return if the model backend answers; raise a ModelClientError if not."""
+        """Return if the configured model is advertised; raise if unavailable."""
         ...
 
     def close(self) -> None:
@@ -117,10 +117,10 @@ class OpenAICompatibleClient:
         return content
 
     def ping(self) -> None:
-        """Check that the model server answers, using the cheap ``/models`` listing.
+        """Check the configured model is present in the cheap ``/models`` listing.
 
-        The connect timeout bounds the whole call, so a readiness probe never waits
-        as long as a generation does.
+        The request uses the short connect-timeout setting instead of the longer
+        generation timeout. It does not perform model inference.
 
         Raises:
             ModelTimeoutError: no answer within ``LLM_CONNECT_TIMEOUT_S``.
@@ -128,7 +128,8 @@ class OpenAICompatibleClient:
         """
         timeout = self.settings.connect_timeout_s
         try:
-            self._http.get("models", timeout=timeout).raise_for_status()
+            response = self._http.get("models", timeout=timeout)
+            response.raise_for_status()
         except httpx2.TimeoutException as exc:
             raise ModelTimeoutError(
                 f"model server did not answer within {timeout}s"
@@ -141,6 +142,23 @@ class OpenAICompatibleClient:
             raise ModelUnavailableError(
                 f"could not reach model server at {self.settings.base_url}"
             ) from exc
+
+        try:
+            listed = response.json()["data"]
+            if not isinstance(listed, list) or not all(
+                isinstance(item, dict) and isinstance(item.get("id"), str)
+                for item in listed
+            ):
+                raise ValueError("invalid model listing")
+            names = {item["id"] for item in listed}
+        except (ValueError, KeyError, TypeError) as exc:
+            raise ModelClientError(
+                "unexpected model listing from model server"
+            ) from exc
+        if self.settings.model not in names:
+            raise ModelUnavailableError(
+                "configured generation model is not available on the model server"
+            )
 
     def close(self) -> None:
         """Close the pooled HTTP connections."""
