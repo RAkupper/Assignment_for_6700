@@ -2,7 +2,7 @@
 
 RAG prototype: `/ask` now connects the team's `vectordb` retrieval to the new
 `generation` module and the existing model client. See the
-[short startup guide](docs/rag-quickstart.md) for `compose.rag.yml` and real catalog loading.
+[short startup guide](docs/rag-quickstart.md) for the unified `compose.yml` and catalog loading.
 
 An installable FastAPI service skeleton for our course ML inference API. This week it
 exposes a typed `/health` endpoint; later assignments will put a model behind it.
@@ -136,11 +136,16 @@ The first run downloads the model (1.1 GB), so it takes a bit longer. Deployment
 defaults are in `.env.production.example` and `compose.yml`; use a `.env` file for
 intentional overrides.
 
-Wait until both containers show `healthy`:
+Wait until app, llm, and qdrant show `healthy`:
 
 ```bash
 docker compose ps
 ```
+
+Compose now enables retrieval-grounded generation. Before using `/ask`, load and
+activate a catalog using the jobs service in the [RAG quickstart](docs/rag-quickstart.md).
+`/ready` returns 503 while the active retrieval index is missing or empty, even
+when the containers' health checks pass. `/health` remains a liveness check.
 
 ### 3. Test the endpoints
 
@@ -284,7 +289,7 @@ use [Compose](#deploy-with-compose) for the full thing.
 
 Retrieval reads from a Qdrant collection built from `data/catalog.sqlite` (see
 [docs/ingestion.md](docs/ingestion.md) for the catalog and the handoff contract).
-For the complete API + Qdrant + Ollama stack, use `compose.rag.yml` as described in
+For the complete API + Qdrant + model-server stack, use `compose.yml` as described in
 [the RAG guide](docs/rag-quickstart.md). The standalone commands below remain useful
 for developing the retrieval module locally.
 
@@ -639,8 +644,8 @@ generation is in flight.
 `POST /ask` accepts `question` and optional `k`, `as_of`, `visa_type`, `sources`,
 and `include_proposed`. It returns `answer` and `sources`; citation `[1]` refers to
 the first source. `POST /retrieve` accepts the same request and returns passages
-without generating. Enable `GENERATION_ENABLED=true` at startup (already set by
-RAG Compose). See the [RAG guide](docs/rag-quickstart.md) for configuration and examples.
+without generating. Compose enables `GENERATION_ENABLED=true` by default.
+See the [RAG guide](docs/rag-quickstart.md) for configuration and examples.
 
 | Model | Field | Type | Validation or example |
 | --- | --- | --- | --- |
@@ -680,8 +685,7 @@ Assignment_for_6700/
 ├── .pre-commit-config.yaml    # Git hooks (ruff, hygiene checks)
 ├── .python-version            # Python 3.13, read by uv and CI
 ├── Dockerfile                 # app image: uv sync --frozen, non-root, HEALTHCHECK
-├── compose.yml                # app + llama.cpp model server, named volume, restarts
-├── compose.rag.yml            # app + team retrieval + Ollama + Qdrant
+├── compose.yml                # API/generation + model server + Qdrant + one-off jobs
 ├── discussion.md              # blocking-call audit: step table and measurements
 ├── pyproject.toml             # metadata, dependencies, tool config
 ├── uv.lock                    # pinned, shared environment

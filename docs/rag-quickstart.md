@@ -10,50 +10,68 @@ implementation. `generation/service.py` contains `GenerationSettings` and the
 service that builds evidence prompts and calls the existing model client.
 `generation/schemas.py` defines the request and answer formats.
 
-## Start the current RAG prototype
+## Start the unified stack
 
-Requirements: Docker, available disk space, and a real `catalog.sqlite` generated
-by ingestion. Place it at `data/catalog.sqlite`. Generated databases are excluded
-from Git; pulling a branch does not download its runtime database.
+All services are defined in `compose.yml`: `app`, `llm` (llama.cpp running
+Qwen2.5-1.5B-Instruct), `qdrant`, and one-off `jobs`. The LLM downloads the pinned
+GGUF model on first startup; no Ollama installation or `ollama pull` is needed.
+FastEmbed handles BGE/BM25 embedding resources separately.
 
-If the original Compose stack is running, stop it with `docker compose down`
-before switching to this stack. Normal `down` preserves named volumes; `down -v`
-deletes them.
+Requirements: Docker, network access for initial downloads, and available disk
+space. For Jetstream2, configure the extra disk as described in
+[deployment.md](deployment.md#data-volume-first-time-only).
+
+`DATA_VOLUME_DIR` defaults to `./volume`. Ingestion stores its catalog at
+`./volume/data/catalog.sqlite`, Qdrant stores its index under `./volume/qdrant`,
+and both the API and jobs use `./volume/embed-cache`. Setting `DATA_VOLUME_DIR`
+changes the shared root for all three. Generated data is excluded from Git.
+
+An existing development `.env` overrides deployment defaults. Before running
+Compose, review it: use `LLM_PROVIDER=openai`,
+`LLM_BASE_URL=http://llm:8080/v1`, `LLM_MODEL=qwen2.5-1.5b-instruct`, and
+`GENERATION_ENABLED=true` for this stack. Use `APP_ENVIRONMENT=production` and
+`APP_DEBUG=false` for deployment. Keep intentional volume paths and credentials.
+See the deployment guide if a bind-mount permission error occurs: jobs need write
+access to `data` and both app and jobs need write access to `embed-cache`.
 
 ```bash
-# Start the model server and vector database.
-docker compose -f compose.rag.yml up -d --wait ollama qdrant
+# Start and wait for the model server and vector database.
+docker compose up -d --wait llm qdrant
 
-# Download the generation model. FastEmbed handles embedding models separately.
-docker compose -f compose.rag.yml exec ollama ollama pull qwen2.5:1.5b-instruct
+# Create the SQLite schema, fetch regulations, then parse them.
+docker compose run --rm --build jobs python -m myapp.ingest.catalog migrate
+docker compose run --rm jobs python -m myapp.ingest fetch --part "8 CFR 214"
+docker compose run --rm jobs python -m myapp.ingest parse --part "8 CFR 214"
 
-# Build and activate an index using the team's loader.
-docker compose -f compose.rag.yml run --rm --build app \
-  python -m myapp.vectordb.loader --catalog /data/catalog.sqlite --activate
+# Build and activate the hybrid retrieval index.
+docker compose run --rm jobs python -m myapp.vectordb.loader --activate
 
-# Start the API.
-docker compose -f compose.rag.yml up -d --build app
-
-# Ask a question.
+# Start the API and check readiness before asking a question.
+docker compose up -d --build app
+curl -f http://localhost:8000/ready
 curl http://localhost:8000/ask \
   -H 'Content-Type: application/json' \
   -d '{"question":"What does Form I-983 relate to?","visa_type":"F-1"}'
 ```
 
-The first load downloads embedding resources into a shared cache. Each normal
-load builds a new collection and activates its alias after loading completes.
-For an interrupted build, follow the README's `--version N --replace` procedure.
-Older prototype collections with a single unnamed vector are incompatible with
-the team's hybrid search and must be replaced by a new catalog import.
+If a current catalog already exists, place a consistent database copy at
+`$DATA_VOLUME_DIR/data/catalog.sqlite` (or `./volume/data/catalog.sqlite` when
+unset), migrate it, and skip fetch/parse. The loader defaults to `/data/catalog.sqlite`
+inside jobs, where `INGEST_DATA_DIR=/data` is explicitly configured.
 
-Qdrant currently has only a `service_started` dependency in this prototype file.
-If the loader encounters a startup connection error, confirm Qdrant is ready and
-retry. This file does not configure Jetstream2's additional disk: named volumes
-use Docker's storage location, and `./data` belongs to the current checkout.
-The merged `compose.yml` also provides the team's Jetstream2/jobs setup with
-`DATA_VOLUME_DIR`. It is a separate stack from this prototype's `compose.rag.yml`;
-their data directories and Qdrant storage are not automatically shared. Select
-the intended stack and storage paths before running ingestion or deployment.
+Jobs run only when requested with `docker compose run`; normal `up` starts app,
+llm, and Qdrant. Each normal load builds a new collection and activates its alias
+after completion. For an interrupted build, follow the README's
+`--version N --replace` procedure.
+
+Older prototype files under `./data` and Docker volumes named `rag-vectors`,
+`rag-models`, or `rag-embeddings` are not automatically migrated or deleted.
+To reuse an old catalog, copy it consistently to the unified data directory and
+rebuild the index there. Single-vector prototype indexes are incompatible with
+the team's hybrid search.
+If the previous prototype is still running under the same Compose project, use
+`docker compose down --remove-orphans` before starting the unified stack. This
+stops old services such as Ollama while retaining their stored data; omit `-v`.
 
 ## API contract
 
@@ -91,18 +109,23 @@ Only `question` is required. Omitted filters use the team's retrieval defaults.
 | `GENERATION_MAX_CONTEXT_CHARS` | Evidence text budget, default 6000 characters |
 | `LLM_*` | Existing generation model client settings |
 
-RAG Compose reads `.env.production.example` and explicitly overrides the Ollama
-address, model, generation flag, and embedding-cache path. It does not pass the
-local `.env` into the app. Direct local Uvicorn runs still read `.env`; enable
-generation and configure a working LLM and Qdrant there when needed.
-`LLM_PROVIDER=openai` selects the compatible request format; this stack uses Ollama.
+Compose reads `.env.production.example`, then an optional `.env` for overrides.
+The app explicitly receives the generation enable flag, context budget, model
+connection, Qdrant URL, and `/embed-cache` path. Generation defaults to enabled
+in Compose and disabled in direct local Uvicorn runs unless configured otherwise.
+`LLM_PROVIDER=openai` selects the compatible request format; the default backend
+is the team's llama.cpp container running Qwen.
 
 | Mount or volume | Contents |
 | --- | --- |
-| `./data:/data:ro` | Read-only catalog access for the loader |
-| `rag-vectors` | Qdrant vectors, text, and metadata |
-| `rag-models` | Ollama generation model files |
-| `rag-embeddings` | BGE/BM25 cache shared by the loader and API |
+| `$DATA_VOLUME_DIR/data:/data` | Jobs read/write the raw files and SQLite catalog |
+| `$DATA_VOLUME_DIR/qdrant:/qdrant/storage` | Qdrant vectors, text, and metadata |
+| `$DATA_VOLUME_DIR/qdrant-snapshots:/qdrant/snapshots` | Qdrant snapshot storage |
+| `$DATA_VOLUME_DIR/embed-cache:/embed-cache` | BGE/BM25 cache shared by jobs and API |
+| `llm-models:/models` | llama.cpp generation model files, managed by Docker |
+
+The first four mounts use `./volume` if `DATA_VOLUME_DIR` is unset. The model's
+named volume uses Docker's storage location; it is not moved by `DATA_VOLUME_DIR`.
 
 The API creates one searcher per process. Synchronous endpoints run in FastAPI's
 worker pool. A lock serializes access to shared embedding models; LLM generation
