@@ -16,7 +16,34 @@ from pydantic import (
 SCHEMA_VERSION: Final = 1  # bump on any breaking change to Record
 
 SourceName = Literal["ecfr", "federal_register", "uscis_policy_manual", "sevp"]
-VisaType = Literal["F-1", "F-2", "J-1", "J-2", "M-1", "M-2"]
+StudentVisa = Literal["F-1", "F-2", "J-1", "J-2", "M-1", "M-2"]
+OtherVisa = Literal[  # whole classes, so student filters can exclude them
+    "A",
+    "B",
+    "C",
+    "CW",
+    "D",
+    "E",
+    "FAS",
+    "G",
+    "H",
+    "I",
+    "K",
+    "L",
+    "LIBYA",
+    "N",
+    "NATO",
+    "O",
+    "P",
+    "Q",
+    "R",
+    "S",
+    "T",
+    "TN",
+    "U",
+    "V",
+]
+VisaType = StudentVisa | OtherVisa
 Authority = Literal["regulation", "agency_policy", "guidance", "rulemaking"]
 Status = Literal["in_force", "pending", "proposed", "superseded", "withdrawn"]
 

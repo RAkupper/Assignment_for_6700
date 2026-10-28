@@ -32,10 +32,44 @@ TABLES = ("TABLE", "GPOTABLE")
 TITLES = ("CAPTION", "TTITLE", "HD", "HD1", "HD2", "HD3", "HED", "P")  # P: gpotbl_title
 NAVIGATION = re.compile(r"\b(?:Section|Paragraph) Contents\b")
 
-VISA_RULES = (  # docs/ingestion.md: assigned by citation, never guessed
+STUDENTS = ("F-1", "F-2", "M-1", "M-2")
+CLASS_BY_LETTER = {  # 214.2 is lettered by visa class; checked against headings
+    "a": "A",
+    "b": "B",
+    "c": "C",
+    "d": "D",
+    "e": "E",
+    "g": "G",
+    "h": "H",
+    "i": "I",
+    "k": "K",
+    "l": "L",
+    "n": "N",
+    "o": "O",
+    "p": "P",
+    "q": "Q",
+    "r": "R",
+    "s": "NATO",
+    "t": "S",
+    "v": "V",
+    "w": "CW",
+}
+VISA_RULES: tuple[tuple[str, tuple[str, ...]], ...] = (  # docs/ingestion.md
     ("8 CFR 214.2(f)", ("F-1", "F-2")),
     ("8 CFR 214.2(j)", ("J-1", "J-2")),
     ("8 CFR 214.2(m)", ("M-1", "M-2")),
+    *((f"8 CFR 214.2({k})", (v,)) for k, v in CLASS_BY_LETTER.items()),
+    ("8 CFR 214.3", STUDENTS),  # school certification for F and M
+    ("8 CFR 214.4", STUDENTS),
+    ("8 CFR 214.5", ("LIBYA",)),
+    ("8 CFR 214.6", ("TN",)),
+    ("8 CFR 214.7", ("FAS",)),
+    ("8 CFR 214.11", ("T",)),
+    ("8 CFR 214.12", STUDENTS),  # preliminary SEVIS enrollment of schools
+    ("8 CFR 214.13", ("F-1", "J-1", "M-1")),  # SEVIS fee, paid by principals
+    ("8 CFR 214.14", ("U",)),
+    ("8 CFR 214.15", ("V",)),
+    *((f"8 CFR 214.{n}", ("T",)) for n in range(200, 217)),
     ("22 CFR 62", ("J-1", "J-2")),
 )
 
@@ -244,7 +278,7 @@ def _table_text(table: ET.Element) -> str:
 def _visa_types(provision_id: str) -> tuple[tuple[str, ...], str]:
     for prefix, visas in VISA_RULES:
         if provision_id == prefix or provision_id.startswith(
-            (prefix + "(", prefix + ".")
+            (prefix + "(", prefix + ".", prefix + " ")  # " ": a section definition
         ):
             return visas, prefix
     return (), ""

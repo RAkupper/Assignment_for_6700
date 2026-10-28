@@ -12,7 +12,7 @@ Checked against live responses on 2026-10-25.
 
 | Source | What we pull | Access | What we found |
 |---|---|---|---|
-| eCFR | 8 CFR 214, 8 CFR 274a, 22 CFR 41, 22 CFR 62 | Versioner API, XML | Requires `Accept-Encoding: gzip`. 8 CFR 214 is ~150k words, 115k of them in §214.2. Paragraphs are flat `<P>` elements; hierarchy exists only as text markers like `(ii) ...—(A)`, up to six levels deep. `(i)` can be a letter or a roman numeral. Dated versions back to 2017. |
+| eCFR | 8 CFR 214, 8 CFR 274a, 22 CFR 41, 22 CFR 62 | Versioner API, XML | Requires `Accept-Encoding: gzip`. 8 CFR 214 is ~150k words, 115k of them in §214.2. Paragraphs are flat `<P>` elements; hierarchy exists only as text markers like `(ii) ...—(A)`, up to seven levels deep. `(i)` can be a letter or a roman numeral. Dated versions back to 2017. |
 | Federal Register | Documents touching those parts | API, JSON metadata and full text | 68 documents on 8 CFR 214 since 2020, including **proposed** rules (OPT fees, 60-day grace period). Rules run ~150 pages, mostly preamble. Full text works from Jetstream2; from other networks it can return a bot-check page **with status 200**, so responses are validated and GovInfo is the fallback. CFR part filter takes integers only (274a must be queried as 274). |
 | USCIS Policy Manual | Vol. 2 Part F (students) and related chapters | HTML, **manual capture** | Chapters ~9k words, lettered and numbered headings, an update date, dozens of footnotes citing 8 CFR paragraphs. Blocks automated access from Jetstream2 (Akamai "Access Denied"). No history API. |
 | SEVP (Study in the States) | Student guidance pages | HTML, **manual capture** | Returns 403 to automated requests from Jetstream2. |
@@ -101,8 +101,19 @@ in `visa_types_rule` so a wrong tag can be traced.
 | 8 CFR 214.2(f) | F-1, F-2 |
 | 8 CFR 214.2(j), 22 CFR 62 | J-1, J-2 |
 | 8 CFR 214.2(m) | M-1, M-2 |
+| 8 CFR 214.3, 214.4, 214.12 (school certification) | F-1, F-2, M-1, M-2 |
+| 8 CFR 214.13 (SEVIS fee) | F-1, J-1, M-1 |
+| Other lettered paragraphs of 8 CFR 214.2 | their class: (a) A, (b) B, (c) C, (d) D, (e) E, (g) G, (h) H, (i) I, (k) K, (l) L, (n) N, (o) O, (p) P, (q) Q, (r) R, (s) NATO, (t) S, (v) V, (w) CW |
+| 8 CFR 214.5, 214.6, 214.7 | LIBYA, TN, FAS |
+| 8 CFR 214.11, 214.200 to 214.216 | T |
+| 8 CFR 214.14, 214.15 | U, V |
 | Policy Manual Vol. 2 Part F | by chapter heading |
-| anything else | empty, meaning applies to all |
+| anything else (e.g. 8 CFR 214.1) | empty, meaning applies to all |
+
+Every other visa class is tagged so that a student's filtered search excludes rules
+for, say, H-1B workers, while an unfiltered search still sees everything. The
+paragraph letters of 214.2 were checked against their headings in every snapshot
+since 2020.
 
 ## Pipeline
 

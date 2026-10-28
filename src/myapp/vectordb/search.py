@@ -32,7 +32,7 @@ class SearchSettings(BaseSettings):
     )
     k: int = Field(default=3, gt=0)
     candidate_k: int = Field(default=50, gt=0)  # per branch, before fusion
-    min_relevance: float = Field(default=0.0, ge=-1.0, le=1.0)  # 0 means off
+    min_relevance: float = Field(default=0.65, ge=-1.0, le=1.0)  # tuned, see README
 
 
 class QueryEncoder(Protocol):
@@ -52,6 +52,7 @@ class Hit(BaseModel):
     score: float  # RRF rank score: compare within one result list only
     relevance: float  # dense cosine to the question: comparable across questions
     heading_path: str
+    parent_text: str  # the parent's lead-in, e.g. "...is admitted if:"
     text: str
     source: str
     authority: str
@@ -182,6 +183,7 @@ def _hit(point: models.ScoredPoint, relevance: float) -> Hit:
         score=point.score,
         relevance=round(relevance, 4),
         heading_path=p.get("heading_path", ""),
+        parent_text=p.get("parent_text", ""),
         text=p["text"],
         source=p["source"],
         authority=p["authority"],

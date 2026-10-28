@@ -176,7 +176,20 @@ def test_visa_types_follow_citation_rules() -> None:
     got = parsed(*[f"({c}) Para {c}." for c in "abcdefghij"], "(1) J one.")
     assert got["8 CFR 214.2(f)"].visa_types == ("F-1", "F-2")
     assert got["8 CFR 214.2(j)(1)"].visa_types_rule == "8 CFR 214.2(j)"
-    assert got["8 CFR 214.2(a)"].visa_types == ()
+    assert got["8 CFR 214.2(h)"].visa_types == ("H",)
+    assert got["8 CFR 214.2(i)"].visa_types == ("I",)
+
+
+def test_section_rules_do_not_leak_into_longer_numbers() -> None:
+    got = parsed("(a) <I>Definitions.</I> As used here:", "<I>Term</I> means X.")
+    assert got["8 CFR 214.2(a)"].visa_types == ("A",)
+    for section, visas in (
+        ("214.1", ()),
+        ("214.11", ("T",)),
+        ("214.13", ("F-1", "J-1", "M-1")),
+    ):
+        got = parsed("(a) A.", "<I>Term</I> means X.", section=section)
+        assert got[f"8 CFR {section}(a)"].visa_types == visas
 
 
 def test_urls_point_at_the_paragraph_on_that_date() -> None:

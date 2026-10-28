@@ -36,16 +36,28 @@ log = logging.getLogger(__name__)
 
 POINT_NAMESPACE = uuid.UUID("5b6f2c1e-6f1a-4b8e-9a8e-2f6d1c3b7a90")  # never change
 
+LEAD_WORDS = 60  # parent lead-in kept short so chunks stay under 512 tokens
+SCHEMA_REQUIRED = 2  # parsed_by_run arrived in migration 0002
+
 VERSIONS_SQL = """
 SELECT p.provision_id, p.source, p.heading_path, p.authority, p.visa_types,
-       v.version, v.text, v.status, v.valid_from, v.valid_to
+       v.version, v.text, v.status, v.valid_from, v.valid_to,
+       (SELECT pv.text FROM provision_versions pv
+         WHERE pv.provision_id = p.parent_id
+           AND coalesce(pv.valid_from, '') <= coalesce(v.valid_from, '')
+           AND (pv.valid_to IS NULL OR pv.valid_to > coalesce(v.valid_from, ''))
+         ORDER BY pv.version DESC LIMIT 1) AS parent_text
 FROM provision_versions v
 JOIN provisions p ON p.provision_id = v.provision_id
 JOIN fetches f ON f.fetch_id = v.fetch_id
-JOIN runs r ON r.run_id = f.run_id
+JOIN runs r ON r.run_id = f.parsed_by_run
 WHERE r.status = 'succeeded'
 ORDER BY p.provision_id, v.version
 """
+
+
+class CatalogTooOldError(RuntimeError):
+    """The catalog predates the schema this loader reads."""
 
 
 class DocumentEncoder(Protocol):
@@ -78,13 +90,25 @@ def to_rfc3339(value: str | None) -> str | None:
     return dt.isoformat().replace("+00:00", "Z")
 
 
+def _lead(text: str | None) -> str:
+    words = (text or "").split()
+    return " ".join(words[:LEAD_WORDS]) + (" ..." if len(words) > LEAD_WORDS else "")
+
+
 def read_chunks(catalog: Path) -> Iterator[Chunk]:
-    """One chunk per provision version for now. Never crosses a provision."""
+    """One chunk per provision version, embedded with its parent's lead-in."""
     uri = f"file:{catalog}?mode=ro"  # the loader never writes the catalog
     with closing(sqlite3.connect(uri, uri=True)) as con:
         con.row_factory = sqlite3.Row
+        have = con.execute("SELECT max(version) FROM schema_migrations").fetchone()[0]
+        if (have or 0) < SCHEMA_REQUIRED:
+            raise CatalogTooOldError(
+                f"catalog schema is at {have}, the loader needs {SCHEMA_REQUIRED}: "
+                "run python -m myapp.ingest.catalog migrate"
+            )
         for row in con.execute(VERSIONS_SQL):
             heading = row["heading_path"] or ""
+            lead = _lead(row["parent_text"])
             payload = {
                 "provision_id": row["provision_id"],
                 "version": row["version"],
@@ -96,13 +120,17 @@ def read_chunks(catalog: Path) -> Iterator[Chunk]:
                 "valid_from": to_rfc3339(row["valid_from"]),
                 "valid_to": to_rfc3339(row["valid_to"]),  # None means in force now
                 "heading_path": heading,
+                "parent_text": lead,
                 "text": row["text"],
             }
+            embedded = " ".join(
+                x for x in (f"{heading}." if heading else "", lead, row["text"]) if x
+            )
             yield Chunk(
                 provision_id=row["provision_id"],
                 version=row["version"],
                 chunk=0,
-                text=f"{heading}. {row['text']}" if heading else row["text"],
+                text=embedded,
                 payload=payload,
             )
 
