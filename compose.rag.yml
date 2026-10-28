@@ -1,0 +1,48 @@
+# Team vectordb + generation + Ollama. See docs/rag-quickstart.md for model/index setup.
+# Uses production settings explicitly; the local .env is not passed to app.
+services:
+  ollama:
+    image: ollama/ollama:0.6.8
+    volumes:
+      - rag-models:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+    restart: unless-stopped
+
+  qdrant:
+    image: qdrant/qdrant:v1.19.2
+    volumes:
+      - rag-vectors:/qdrant/storage
+    restart: unless-stopped
+
+  app:
+    build: .
+    env_file: .env.production.example
+    environment:
+      LLM_PROVIDER: openai
+      LLM_BASE_URL: http://ollama:11434/v1
+      LLM_MODEL: qwen2.5:1.5b-instruct
+      LLM_MAX_TOKENS: "512"
+      GENERATION_ENABLED: "true"
+      QDRANT_URL: http://qdrant:6333
+      # Embeddings run in app through the team's FastEmbed encoder, not Ollama.
+      EMBED_CACHE_DIR: /app/.cache/fastembed
+    volumes:
+      - ./data:/data:ro
+      - rag-embeddings:/app/.cache/fastembed
+    ports:
+      - "8000:8000"
+    depends_on:
+      ollama:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+    restart: unless-stopped
+
+volumes:
+  rag-models:
+  rag-vectors:
+  rag-embeddings:

@@ -28,6 +28,9 @@ ENV PATH="/app/.venv/bin:$PATH" \
 # Create a non-root user
 RUN useradd --create-home --uid 10001 appuser
 
+# Named embedding-cache volumes inherit this writable directory for appuser.
+RUN mkdir -p /app/.cache/fastembed && chown -R appuser:appuser /app/.cache
+
 # Copy the installed application and dependencies
 COPY --from=builder /app/.venv /app/.venv
 COPY models/ ./models/
