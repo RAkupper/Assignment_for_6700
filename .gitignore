@@ -48,3 +48,6 @@ _to_delete/
 .env
 .env.*
 !.env.*.example
+
+# Ingestion output (raw pulls, records); lives on the instance, not in git
+data/

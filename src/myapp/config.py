@@ -1,10 +1,18 @@
 # Read service configuration from environment variables.
 
 # Imports
+from datetime import date
 from pathlib import Path
-from typing import Literal, Self
+from typing import Annotated, Literal, Self
 
-from pydantic import Field, FilePath, HttpUrl, SecretStr, model_validator
+from pydantic import (
+    Field,
+    FilePath,
+    HttpUrl,
+    SecretStr,
+    StringConstraints,
+    model_validator,
+)
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -69,4 +77,39 @@ class Settings(BaseSettings):
         """Refuse to serve the placeholder echo model in production"""
         if self.environment == "production" and self.llm.provider == "echo":
             raise ValueError("LLM_PROVIDER must not be 'echo' in production")
+        return self
+
+
+CfrPart = Annotated[str, StringConstraints(pattern=r"^\d+ CFR \d+[a-z]?$")]
+
+
+class IngestSettings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_prefix="INGEST_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        str_strip_whitespace=True,
+        extra="ignore",
+    )
+    data_dir: Path = Path("data")  # bind-mounted at /data on the instance
+    ecfr_base_url: HttpUrl = HttpUrl("https://www.ecfr.gov")
+    ecfr_parts: list[CfrPart] = Field(  # JSON list in the environment
+        default=["8 CFR 214", "8 CFR 274a", "22 CFR 41", "22 CFR 62"],
+        min_length=1,
+    )
+    federal_register_base_url: HttpUrl = HttpUrl(
+        "https://www.federalregister.gov/api/v1"
+    )
+    federal_register_since: date = date(2020, 1, 1)  # first backfill only
+    user_agent: str = Field(
+        default="dsan6700-ingest (Georgetown DSAN student project)", min_length=1
+    )
+    request_timeout_s: float = Field(default=30.0, gt=0)
+    min_request_interval_s: float = Field(default=1.0, ge=0)  # per-host politeness
+    max_retries: int = Field(default=3, ge=0, le=10)
+
+    @model_validator(mode="after")
+    def reject_duplicate_parts(self) -> Self:
+        if len(set(self.ecfr_parts)) != len(self.ecfr_parts):
+            raise ValueError("INGEST_ECFR_PARTS has duplicates")
         return self
