@@ -36,6 +36,8 @@ class RawDocument(BaseModel):
     retrieved_at: AwareDatetime
     content_type: str  # e.g. application/xml, text/html
     body: bytes
+    status_code: int = 200
+    source_version: str | None = None  # eCFR: the date the snapshot represents
 
 
 class RecordMetadata(BaseModel):
