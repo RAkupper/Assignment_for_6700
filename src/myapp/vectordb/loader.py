@@ -1,7 +1,7 @@
 """Build a new Qdrant collection version from catalog.sqlite.
 
 Run as a one-off task, never at app startup:
-    docker compose run --rm app python -m myapp.vectordb.loader --activate
+    docker compose run --rm jobs python -m myapp.vectordb.loader --activate
 """
 
 import argparse
@@ -19,6 +19,8 @@ from typing import Any, Protocol
 
 from qdrant_client import QdrantClient, models
 
+from myapp.config import IngestSettings
+from myapp.ingest.catalog import catalog_path
 from myapp.vectordb.collection import (
     DENSE,
     SPARSE,
@@ -196,7 +198,7 @@ def build(
 
 def main(argv: Sequence[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--catalog", type=Path, default=Path("data/catalog.sqlite"))
+    parser.add_argument("--catalog", type=Path)  # default: INGEST_DATA_DIR's catalog
     parser.add_argument("--version", type=int)  # default: next free version
     parser.add_argument("--replace", action="store_true")  # rebuild a non-live one
     parser.add_argument("--activate", action="store_true")  # move the alias after
@@ -209,7 +211,7 @@ def main(argv: Sequence[str] | None = None) -> None:
         build(
             get_client(settings),
             Encoder(EmbeddingSettings()),
-            args.catalog,
+            args.catalog or catalog_path(IngestSettings()),
             settings.alias,
             version=args.version,
             replace=args.replace,
