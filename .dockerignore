@@ -22,6 +22,9 @@ htmlcov
 # Exclude the accidentally nested clone
 Assignment_for_6700/
 
+# Exclude local Compose data (DATA_VOLUME_DIR default)
+volume/
+
 # Exclude virtual environments and Python caches
 .venv
 **/.venv
