@@ -2,7 +2,7 @@
 
 import json
 from datetime import UTC, datetime
-from threading import Lock
+from threading import BoundedSemaphore, Lock
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -22,6 +22,14 @@ class GenerationSettings(BaseSettings):
     enabled: bool = False
     # A conservative excerpt budget, not a tokenizer-based context-window guarantee.
     max_context_chars: int = Field(default=6000, ge=100, le=20000)
+    # Match llama.cpp's slots (-np); more requests at once overflow its KV cache.
+    max_concurrent: int = Field(default=2, ge=1, le=8)
+    # Stay well under LLM_TIMEOUT_S so a busy server answers fast instead of late.
+    queue_timeout_s: float = Field(default=30.0, ge=0, le=110)
+
+
+class GenerationBusyError(ModelUnavailableError):
+    """Every generation slot stayed taken for the whole queue timeout."""
 
 
 class GenerationService:
@@ -32,6 +40,7 @@ class GenerationService:
         self.settings = settings
         # Share loaded embedding models without concurrent encoder invocations.
         self._search_lock = Lock()
+        self._slots = BoundedSemaphore(settings.max_concurrent)
 
     @classmethod
     def from_settings(cls, settings: GenerationSettings) -> "GenerationService":
@@ -113,6 +122,16 @@ class GenerationService:
             ) from exc
 
     def ask(self, request: QuestionRequest, model: ModelClient) -> Answer:
+        if not self._slots.acquire(timeout=self.settings.queue_timeout_s):
+            raise GenerationBusyError(
+                "All answer slots are busy; try again in a minute"
+            )
+        try:
+            return self._ask(request, model)
+        finally:
+            self._slots.release()
+
+    def _ask(self, request: QuestionRequest, model: ModelClient) -> Answer:
         hits = self.retrieve(request)
         if not hits:
             return Answer(

@@ -29,8 +29,12 @@ services:
       - ${LLM_HF_REPO:-Qwen/Qwen2.5-1.5B-Instruct-GGUF:Q4_K_M}
       - --alias
       - ${LLM_MODEL:-qwen2.5-1.5b-instruct}
+      # Two slots with 4096 tokens each. One /ask prompt is ~1,400 tokens; 4 slots on
+      # one 4096 cache failed all requests once 3 ran at once (#42).
       - -c
-      - "4096"
+      - ${LLM_CTX_SIZE:-8192}
+      - -np
+      - ${LLM_PARALLEL:-2}
     environment:
       LLAMA_CACHE: /models
     volumes:
@@ -84,6 +88,9 @@ services:
       EMBED_CACHE_DIR: /embed-cache
       GENERATION_ENABLED: ${GENERATION_ENABLED:-true}
       GENERATION_MAX_CONTEXT_CHARS: ${GENERATION_MAX_CONTEXT_CHARS:-6000}
+      # Same number as llama.cpp's slots, so the app never overfills them.
+      GENERATION_MAX_CONCURRENT: ${LLM_PARALLEL:-2}
+      GENERATION_QUEUE_TIMEOUT_S: ${GENERATION_QUEUE_TIMEOUT_S:-30}
     volumes:
       - ${DATA_VOLUME_DIR:-./volume}/embed-cache:/embed-cache
     ports:

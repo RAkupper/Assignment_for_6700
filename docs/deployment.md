@@ -35,8 +35,10 @@ TEAM02 (Jetstream2 m3.small: 2 vCPUs, 6 GB RAM, 20 GB root disk + 40 GB volume)
 
 1. In [Exosphere](https://jetstream2.exosphere.app), open TEAM02. If it is shelved,
    choose **Actions → Unshelve** and wait for **Ready**.
-2. Copy the **public IP** from the instance page. We keep it when shelving, so it
-   stays `149.165.173.215`; if it ever differs, use the one shown there.
+2. Copy the **public IP** from the instance page. It can change on unshelve while
+   Jetstream2 is short of floating IPs (it moved to `149.165.153.173` on Oct 28),
+   so check it each time. SSH then says the host key is known under the old IP;
+   answer `yes`.
 3. From your laptop (your SSH key must be in the instance's `authorized_keys`):
 
    ```bash
@@ -160,6 +162,27 @@ The m3.small has 2 vCPUs and 6 GB RAM, shared by every container.
 - A `jobs` run gets one CPU (`JOBS_CPUS`), so `llm` keeps the other while a load
   embeds. A full load of 8 CFR 214 then takes about twice as long as on two cores.
   Run loads when nobody is testing, and say so in the group chat.
+- `llm` runs two slots with 4096 tokens each (`-c 8192 -np 2`), and the app lets at
+  most that many questions use them (`GENERATION_MAX_CONCURRENT`, set from
+  `LLM_PARALLEL`). A third question waits up to `GENERATION_QUEUE_TIMEOUT_S` (30 s)
+  for a slot, then gets 503 "busy". `/retrieve` does not call the model and is not
+  limited. Change both slot settings together: `LLM_CTX_SIZE` is 4096 times
+  `LLM_PARALLEL`.
+
+Measured on TEAM02 on Oct 28, full 8 CFR 214 index (3,882 points):
+
+| What | Result |
+| --- | --- |
+| Loader (`--activate`, one CPU) | 20 min |
+| `scripts/smoke_rag.py`, one question | 25 s, all checks pass |
+| One `/ask` prompt | about 1,400 tokens |
+| 3 `/ask` at once, 4 slots on one 4096 cache | all 503 after 47 s: "Context size has been exceeded" |
+| 3 identical `/ask` at once, `-c 8192 -np 2` | all 200 in 48 to 49 s; llm at 1.0 of 3 GB |
+
+On two cores, two questions at once each take about as long as two in a row, so
+expect about 20 s for one question, 48 s for two at once, and a third to wait for
+a slot. The identical questions above let the third reuse a cached prompt, so a
+different third question will take longer.
 
 ## Load the regulations into Qdrant
 
