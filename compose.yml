@@ -17,6 +17,9 @@
 # Ingestion output, Qdrant storage and the embedding model cache live under
 # DATA_VOLUME_DIR: the 20 GB Jetstream2 volume on TEAM02 (set it in .env), or
 # ./volume on a laptop. The root disk is almost full, so nothing big goes there.
+# On TEAM02, Docker's own data (images in /var/lib/containerd, the llm-models
+# volume in /var/lib/docker) is bind-mounted from the volume too; see "Data volume"
+# in docs/deployment.md.
 
 services:
   llm:
@@ -32,6 +35,8 @@ services:
       LLAMA_CACHE: /models
     volumes:
       - llm-models:/models
+    # Weights and context need about 1.3 GB; the cap keeps an OOM inside this container.
+    mem_limit: ${LLM_MEM_LIMIT:-3g}
     # /health answers 503 while the model loads and 200 once it can serve.
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
@@ -111,6 +116,8 @@ services:
     depends_on:
       qdrant:
         condition: service_healthy
+    # Embedding on both cores would starve llm and slow /ask, so a load gets one.
+    cpus: ${JOBS_CPUS:-1}
     # The image's health check probes the API on port 8000, which jobs don't run.
     healthcheck:
       disable: true
