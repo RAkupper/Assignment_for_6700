@@ -505,3 +505,76 @@ def test_health_stays_available_during_readiness_probe(
         finally:
             release.set()
         assert ready.result(timeout=5).status_code == 200
+
+
+def _held_api(
+    generation: GenerationService,
+    model: FakeModelClient,
+    monkeypatch: pytest.MonkeyPatch,
+    max_concurrent: int,
+    queue_timeout_s: float,
+) -> tuple[threading.Event, threading.Event]:
+    started, release = threading.Event(), threading.Event()
+    generation.settings = GenerationSettings(
+        _env_file=None, max_concurrent=max_concurrent, queue_timeout_s=queue_timeout_s
+    )
+    generation._slots = threading.BoundedSemaphore(max_concurrent)
+
+    def held_generate(prompt: str) -> str:
+        started.set()
+        assert release.wait(timeout=5)
+        return "Fixture answer [1]."
+
+    monkeypatch.setattr(model, "generate", held_generate)
+    return started, release
+
+
+def test_busy_slots_return_503_without_calling_the_model(
+    api: tuple[TestClient, FakeModelClient],
+    generation: GenerationService,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client, model = api
+    started, release = _held_api(generation, model, monkeypatch, 1, 0.05)
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first = pool.submit(client.post, "/ask", json={"question": "Form I-983"})
+        try:
+            assert started.wait(timeout=5)
+            busy = client.post("/ask", json={"question": "Form I-983"})
+            assert busy.status_code == 503
+            assert "busy" in busy.json()["detail"]
+            assert client.post("/retrieve", json={"question": "Form I-983"}).is_success
+        finally:
+            release.set()
+        assert first.result(timeout=5).status_code == 200
+
+
+def test_waiting_request_gets_a_freed_slot(
+    api: tuple[TestClient, FakeModelClient],
+    generation: GenerationService,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client, model = api
+    started, release = _held_api(generation, model, monkeypatch, 1, 5.0)
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first = pool.submit(client.post, "/ask", json={"question": "Form I-983"})
+        assert started.wait(timeout=5)
+        second = pool.submit(client.post, "/ask", json={"question": "Form I-983"})
+        release.set()
+        assert first.result(timeout=5).status_code == 200
+        assert second.result(timeout=5).status_code == 200
+
+
+def test_failed_generation_frees_its_slot(
+    api: tuple[TestClient, FakeModelClient],
+    generation: GenerationService,
+) -> None:
+    client, model = api
+    generation.settings = GenerationSettings(
+        _env_file=None, max_concurrent=1, queue_timeout_s=0.05
+    )
+    generation._slots = threading.BoundedSemaphore(1)
+    model.error = ModelTimeoutError("timed out")
+    assert client.post("/ask", json={"question": "Form I-983"}).status_code == 504
+    model.error = None
+    assert client.post("/ask", json={"question": "Form I-983"}).status_code == 200
