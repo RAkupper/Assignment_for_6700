@@ -128,6 +128,17 @@ def test_ask_retrieves_and_sends_evidence_to_existing_llm(
     assert "Current fixture" in evidence[0]["text"]
 
 
+def test_uncited_answer_is_returned_without_retry_or_rejection(
+    generation: GenerationService,
+) -> None:
+    model = FakeModelClient(answer="A prototype response without inline references.")
+    result = generation.ask(QuestionRequest(question="Form I-983", k=1), model)
+    assert result.answer == model.answer
+    assert result.status == "answered"
+    assert result.sources
+    assert len(model.prompts) == 1
+
+
 def test_parent_context_reaches_generation_prompt(
     api: tuple[TestClient, FakeModelClient],
     generation: GenerationService,
