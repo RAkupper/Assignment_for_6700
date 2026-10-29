@@ -4,34 +4,50 @@ import asyncio
 import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Annotated, Literal
 
 import joblib  # type: ignore[import-untyped]  # joblib does not ship type information.
-from fastapi import Depends, FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field
 
 from myapp.config import Settings
+from myapp.generation.schemas import Answer, QuestionRequest
+from myapp.generation.service import GenerationService, GenerationSettings
 from myapp.model_client import (
+    EchoModelClient,
     ModelClient,
     ModelClientError,
     ModelTimeoutError,
     ModelUnavailableError,
     build_model_client,
 )
+from myapp.vectordb.search import Hit
 
 settings = Settings()
+generation_settings = GenerationSettings()
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    """Load the digits model and build the model client once, before serving."""
+    """Load models once; generation shares the team's retrieval service."""
     app.state.model = joblib.load(settings.model_path)
     client = build_model_client(settings)
     app.state.model_client = client
+    generation: GenerationService | None = None
     try:
+        if generation_settings.enabled:
+            generation = await asyncio.to_thread(
+                GenerationService.from_settings, generation_settings
+            )
+        app.state.generation = generation
         yield
     finally:
+        app.state.generation = None
+        if generation is not None:
+            generation.close()
         client.close()
         del app.state.model
 
@@ -39,6 +55,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 app = FastAPI(
     title=settings.name, version="0.1.0", debug=settings.debug, lifespan=lifespan
 )
+web_dir = Path(__file__).with_name("web")
+app.mount("/assets", StaticFiles(directory=web_dir), name="assets")
+
+
+@app.get("/", include_in_schema=False)
+def index() -> FileResponse:
+    """Serve the same-origin prototype UI without a separate frontend server."""
+    return FileResponse(web_dir / "index.html")
 
 
 def get_model_client(request: Request) -> ModelClient:
@@ -91,7 +115,7 @@ def health() -> HealthResponse:
 
 
 class ReadyResponse(BaseModel):
-    """Typed body returned when the model backend is reachable."""
+    """All dependencies for the enabled API features passed their probes."""
 
     status: Literal["ready"]
 
@@ -99,18 +123,26 @@ class ReadyResponse(BaseModel):
 @app.get(
     "/ready",
     response_model=ReadyResponse,
-    responses={503: {"model": ErrorResponse}, 504: {"model": ErrorResponse}},
+    responses={
+        502: {"model": ErrorResponse},
+        503: {"model": ErrorResponse},
+        504: {"model": ErrorResponse},
+    },
 )
-def ready(model: Annotated[ModelClient, Depends(get_model_client)]) -> ReadyResponse:
-    """Confirm the model backend answers, unlike ``/health`` which only checks the app.
+def ready(
+    request: Request,
+    model: Annotated[ModelClient, Depends(get_model_client)],
+) -> ReadyResponse:
+    """Probe the configured LLM and, when enabled, loaded retrieval dependencies.
 
-    A plain ``def`` route runs in a worker thread, so the blocking probe does not
-    stall the event loop. Failures become 503 or 504 through ``model_error_handler``.
-
-    Returns:
-        ReadyResponse: ``ready`` when the model server answered.
+    Metadata checks run in a worker thread, without generating an answer or
+    performing embeddings. Failures preserve the existing 502/503/504 mapping.
     """
     model.ping()
+    if generation_settings.enabled:
+        if isinstance(model, EchoModelClient):
+            raise ModelUnavailableError("generation requires a real model backend")
+        get_generation_service(request).check_ready()
     return ReadyResponse(status="ready")
 
 
@@ -126,6 +158,35 @@ class GenerateResponse(BaseModel):
     """Text the model returned for a prompt."""
 
     completion: str
+
+
+def get_generation_service(request: Request) -> GenerationService:
+    service: GenerationService | None = getattr(request.app.state, "generation", None)
+    if service is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Generation disabled; set GENERATION_ENABLED=true and restart",
+        )
+    return service
+
+
+@app.post("/retrieve", response_model=list[Hit])
+def retrieve(
+    body: QuestionRequest,
+    generation: Annotated[GenerationService, Depends(get_generation_service)],
+) -> list[Hit]:
+    """Inspect retrieved passages before involving generation."""
+    return generation.retrieve(body)
+
+
+@app.post("/ask", response_model=Answer)
+def ask(
+    body: QuestionRequest,
+    generation: Annotated[GenerationService, Depends(get_generation_service)],
+    model: Annotated[ModelClient, Depends(get_model_client)],
+) -> Answer:
+    """Retrieve evidence and generate an answer in FastAPI's worker thread."""
+    return generation.ask(body, model)
 
 
 @app.post("/generate", response_model=GenerateResponse)

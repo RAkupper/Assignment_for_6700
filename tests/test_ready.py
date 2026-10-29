@@ -97,11 +97,28 @@ def test_ping_lists_models_on_the_server() -> None:
 
     def handler(request: httpx2.Request) -> httpx2.Response:
         seen.append(request)
-        return httpx2.Response(200, json={"data": []})
+        return httpx2.Response(200, json={"data": [{"id": "qwen2.5:1.5b-instruct"}]})
 
     make_client(handler).ping()
 
     assert [(r.method, r.url.path) for r in seen] == [("GET", "/v1/models")]
+
+
+@pytest.mark.parametrize("listed", [[], [{"id": "some-other-model"}]])
+def test_ping_rejects_missing_configured_model(listed: list[object]) -> None:
+    with pytest.raises(ModelUnavailableError, match="configured generation model"):
+        make_client(lambda request: httpx2.Response(200, json={"data": listed})).ping()
+
+
+@pytest.mark.parametrize("body", [{}, {"data": None}, {"data": [{}]}, []])
+def test_ping_rejects_malformed_model_list(body: object) -> None:
+    with pytest.raises(ModelClientError, match="unexpected model listing"):
+        make_client(lambda request: httpx2.Response(200, json=body)).ping()
+
+
+def test_ping_rejects_non_json_reply() -> None:
+    with pytest.raises(ModelClientError, match="unexpected model listing"):
+        make_client(lambda request: httpx2.Response(200, text="not JSON")).ping()
 
 
 def test_ping_maps_http_errors_to_unavailable() -> None:

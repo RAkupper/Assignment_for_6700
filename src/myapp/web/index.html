@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Student Visa Guide · Research Prototype</title>
+  <link rel="stylesheet" href="/assets/app.css">
+  <script src="/assets/app.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="Student Visa Guide home"><span class="mark">§</span> Student Visa Guide</a>
+    <div class="top-right"><span class="prototype">Research prototype</span><button id="readiness" class="service-status" type="button">Checking service…</button></div>
+  </header>
+  <main>
+    <section class="intro">
+      <p class="eyebrow">REGULATIONS, WITH THE EVIDENCE ATTACHED</p>
+      <h1>Ask a question.<br><em>Follow the evidence.</em></h1>
+      <p class="lede">Explore student visa rules using indexed federal regulations. Open a citation to see the passage behind an answer.</p>
+    </section>
+    <section class="workspace" aria-label="Ask and review evidence">
+      <div class="question-card">
+        <form id="question-form">
+          <label for="question">What would you like to know?</label>
+          <textarea id="question" name="question" maxlength="1000" required rows="3" placeholder="How many hours can I work on campus?"></textarea>
+          <div class="form-bottom">
+            <div class="filters">
+              <label class="small-label" for="visa">Visa type<select id="visa" name="visa"><option value="F-1">F-1</option><option value="F-2">F-2</option><option value="J-1">J-1</option><option value="J-2">J-2</option><option value="M-1">M-1</option><option value="M-2">M-2</option><option value="">All visa types</option></select></label>
+              <label class="small-label" for="as-of">Rules as of<input type="date" id="as-of" name="as_of" aria-describedby="date-help"></label>
+            </div>
+            <button id="ask-button" class="primary" type="submit">Ask with sources <span aria-hidden="true">↗</span></button>
+          </div>
+          <p id="date-help" class="hint">Leave the date blank to search rules in force today. Results reflect only the indexed data.</p>
+        </form>
+        <div class="examples" aria-label="Example questions"><span>Try a question</span><button type="button" data-question="How many hours can I work on campus?">On-campus work hours</button><button type="button" data-question="What does Form I-983 relate to?">Form I-983</button></div>
+      </div>
+      <p id="request-status" class="request-status" role="status" aria-live="polite"></p>
+      <div id="error" class="error" role="alert" hidden></div>
+      <section id="results" class="results" hidden aria-label="Answer and supporting evidence">
+        <article class="answer-card">
+          <p class="eyebrow">YOUR ANSWER</p><h2 id="answer-heading">Here is what the sources say.</h2>
+          <p id="answer-note" class="hint"></p><div id="answer" class="answer-text"></div>
+          <p class="answer-footnote">Citation labels point to retrieved passages. Review the evidence and its context before relying on the answer.</p>
+        </article>
+        <aside class="evidence-panel" aria-label="Retrieved evidence"><div class="evidence-heading"><h2>Supporting evidence</h2><span id="source-count"></span></div><div id="sources"></div></aside>
+      </section>
+      <div id="empty-state" class="empty-state"><span aria-hidden="true">§</span><div><strong>A clear answer starts with a source.</strong><p>Ask above to see a response and its supporting regulatory passages side by side.</p></div></div>
+    </section>
+  </main>
+  <footer><span>Georgetown University · DSAN 6700</span><span>Prototype answers require source review.</span></footer>
+</body>
+</html>

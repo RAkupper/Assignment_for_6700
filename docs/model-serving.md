@@ -105,7 +105,7 @@ With llama.cpp serving Qwen2.5-1.5B-Instruct (Q4_K_M):
 - App image: 208 MB. Port 8080 is not reachable from outside; `/health` answers
   from a laptop in 0.06 s.
 
-At 25 tokens/s, `LLM_MAX_TOKENS` is capped at 128 in compose so answers under
+The original deployment capped `LLM_MAX_TOKENS` at 128 so answers under
 concurrent load stay inside the 120 s client timeout.
 
 ## Configuration reference

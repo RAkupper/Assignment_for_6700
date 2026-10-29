@@ -1,5 +1,6 @@
 # Service stack: the FastAPI app, the model server it calls over HTTP, and the
-# Qdrant vector database. How to start, check and troubleshoot it on Jetstream2:
+# Qdrant vector database, with generation enabled for /ask.
+# How to start, check and troubleshoot it on Jetstream2:
 # docs/deployment.md
 #
 # Fresh clone on the instance:   docker compose up -d
@@ -77,11 +78,12 @@ services:
       LLM_PROVIDER: ${LLM_PROVIDER:-openai}
       LLM_BASE_URL: ${LLM_BASE_URL:-http://llm:8080/v1}
       LLM_MODEL: ${LLM_MODEL:-qwen2.5-1.5b-instruct}
-      # 2 vCPUs generate ~25 tokens/s, so long answers under concurrent load
-      # would exceed the 120 s client timeout.
-      LLM_MAX_TOKENS: ${LLM_MAX_TOKENS:-128}
+      # Leave room for short answers with citations; keep the prototype bounded.
+      LLM_MAX_TOKENS: ${LLM_MAX_TOKENS:-256}
       QDRANT_URL: ${QDRANT_URL:-http://qdrant:6333}
       EMBED_CACHE_DIR: /embed-cache
+      GENERATION_ENABLED: ${GENERATION_ENABLED:-true}
+      GENERATION_MAX_CONTEXT_CHARS: ${GENERATION_MAX_CONTEXT_CHARS:-6000}
     volumes:
       - ${DATA_VOLUME_DIR:-./volume}/embed-cache:/embed-cache
     ports:

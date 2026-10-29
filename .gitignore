@@ -52,5 +52,5 @@ volume/
 .env.*
 !.env.*.example
 
-# Ingestion output (raw pulls, records); lives on the instance, not in git
+# Ingestion output and generated RAG catalogs; keep data out of git
 data/

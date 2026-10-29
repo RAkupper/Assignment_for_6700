@@ -9,9 +9,11 @@ do when something breaks. The stack is defined in [`compose.yml`](../compose.yml
 TEAM02 (Jetstream2 m3.small: 2 vCPUs, 6 GB RAM, 20 GB root disk + 40 GB volume)
 ├── app   container, port 8000 (public)
 │     ├── GET  /health    the app process is up
-│     ├── GET  /ready     the LLM server answers
+│     ├── GET  /ready     configured LLM and enabled retrieval dependencies are ready
 │     ├── POST /predict   digits classifier (scikit-learn), loaded inside the app
-│     └── POST /generate  asks the llm container over the compose network
+│     ├── POST /generate  asks the llm container over the compose network
+│     ├── POST /retrieve  returns matching provisions from Qdrant
+│     └── POST /ask       retrieves evidence and generates a cited answer
 ├── llm   container, port 8080 (internal only)
 │     └── llama.cpp server with Qwen2.5-1.5B-Instruct (Q4_K_M)
 │         weights in the named volume llm-models
@@ -52,6 +54,10 @@ TEAM02 (Jetstream2 m3.small: 2 vCPUs, 6 GB RAM, 20 GB root disk + 40 GB volume)
 
 The first start downloads the model weights (1.1 GB) into the `llm-models`
 volume; later starts reuse them. `app` starts once `llm` reports healthy.
+Compose also enables generation and waits for Qdrant's health check. `/ready`
+returns 503 until a compatible, nonempty retrieval index is loaded and activated.
+`/health` can pass before that happens. The complete sequence is in
+[the RAG quickstart](rag-quickstart.md).
 
 ## Data volume (first time only)
 
@@ -158,8 +164,8 @@ The m3.small has 2 vCPUs and 6 GB RAM, shared by every container.
 ## Load the regulations into Qdrant
 
 Ingestion and loading are one-off jobs, never part of app startup (see
-[ingestion.md](ingestion.md)). They need the ingestion and Qdrant PRs (#31, #33, #35)
-on main.
+[ingestion.md](ingestion.md)). The same Compose file supplies jobs and the API
+with a shared Qdrant URL and embedding cache.
 
 ```bash
 docker compose run --rm jobs python -m myapp.ingest.catalog migrate
@@ -169,8 +175,9 @@ docker compose run --rm jobs python -m myapp.vectordb.loader --activate
 docker compose run --rm jobs python -m myapp.vectordb.search "Can I work on campus?" --visa F-1
 ```
 
-`run` starts qdrant first if it is not up. The loader reads the catalog in `/data`
-(`INGEST_DATA_DIR`). It builds a new collection
+`run` starts qdrant first if it is not up. The loader defaults to
+`INGEST_DATA_DIR/catalog.sqlite`, which is `/data/catalog.sqlite` inside jobs.
+The loader builds a new collection
 and moves the `provisions` alias to it. To roll back, move the alias back:
 `docker compose run --rm jobs python -m myapp.vectordb.collection activate provisions_v1`.
 
@@ -182,6 +189,9 @@ curl http://<public-ip>:8000/ready
 curl -X POST http://<public-ip>:8000/generate \
   -H "Content-Type: application/json" \
   -d '{"prompt": "What is OPT?"}'
+curl -X POST http://<public-ip>:8000/ask \
+  -H "Content-Type: application/json" \
+  -d '{"question": "What does Form I-983 relate to?", "visa_type": "F-1"}'
 curl -X POST http://<public-ip>:8000/predict \
   -H "Content-Type: application/json" \
   -d '{"pixels":[0,0,7,15,13,1,0,0,0,8,13,6,15,4,0,0,0,2,1,13,13,0,0,0,0,0,2,15,11,1,0,0,0,0,0,1,12,12,1,0,0,0,0,0,1,10,8,0,0,0,8,4,5,14,9,0,0,0,7,13,13,9,0,0]}'
