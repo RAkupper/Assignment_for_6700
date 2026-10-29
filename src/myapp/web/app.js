@@ -74,7 +74,9 @@ function renderSources(sources) {
     card.id = `source-${number}`;
     card.tabIndex = -1;
     const title = element("h3", "source-title");
-    title.append(element("span", "source-number", `[${number}]`), element("span", "", source.provision_id));
+    const citation = source.url ? element("a", "", source.provision_id) : element("span", "", source.provision_id);
+    if (source.url) Object.assign(citation, { href: source.url, target: "_blank", rel: "noopener" });
+    title.append(element("span", "source-number", `[${number}]`), citation);
     card.append(title, element("p", "source-meta", `${source.source} · ${source.authority} · status now: ${source.status}`));
     card.append(element("p", "source-heading", source.heading_path.split(" > ").slice(-3).join(" › ")));
     const details = document.createElement("details");

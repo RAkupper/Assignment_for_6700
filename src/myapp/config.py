@@ -7,7 +7,6 @@ from typing import Annotated, Literal, Self
 
 from pydantic import (
     Field,
-    FilePath,
     HttpUrl,
     SecretStr,
     StringConstraints,
@@ -62,7 +61,6 @@ class Settings(BaseSettings):
     name: str = Field(default="assignment-for-6700", min_length=1)
     environment: Literal["development", "production"] = "development"
     debug: bool = False
-    model_path: FilePath = Path("models/digits.joblib")
     llm: ModelSettings = Field(default_factory=ModelSettings)
 
     @model_validator(mode="after")

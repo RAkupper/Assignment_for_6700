@@ -25,7 +25,14 @@ class GenerationSettings(BaseSettings):
     # Match llama.cpp's slots (-np); more requests at once overflow its KV cache.
     max_concurrent: int = Field(default=2, ge=1, le=8)
     # Stay well under LLM_TIMEOUT_S so a busy server answers fast instead of late.
-    queue_timeout_s: float = Field(default=30.0, ge=0, le=110)
+    queue_timeout_s: float = Field(default=60.0, ge=0, le=110)
+
+
+NOT_COVERED = (
+    "Insufficient evidence: the rules indexed here do not cover this question. "
+    "Ask your school's Designated School Official (DSO), or for J-1 your "
+    "program's Responsible Officer."
+)
 
 
 class GenerationBusyError(ModelUnavailableError):
@@ -122,23 +129,23 @@ class GenerationService:
             ) from exc
 
     def ask(self, request: QuestionRequest, model: ModelClient) -> Answer:
+        hits = self.retrieve(request)
+        if not hits:  # answered without the model, so it never waits for a slot
+            return Answer(
+                answer=NOT_COVERED, sources=[], status="insufficient_evidence"
+            )
         if not self._slots.acquire(timeout=self.settings.queue_timeout_s):
             raise GenerationBusyError(
                 "All answer slots are busy; try again in a minute"
             )
         try:
-            return self._ask(request, model)
+            return self._generate(request, hits, model)
         finally:
             self._slots.release()
 
-    def _ask(self, request: QuestionRequest, model: ModelClient) -> Answer:
-        hits = self.retrieve(request)
-        if not hits:
-            return Answer(
-                answer="Insufficient evidence in the indexed sources to answer.",
-                sources=[],
-                status="insufficient_evidence",
-            )
+    def _generate(
+        self, request: QuestionRequest, hits: list[Hit], model: ModelClient
+    ) -> Answer:
 
         # Keep every selected source represented, with a bounded excerpt per source.
         limit = max(1, self.settings.max_context_chars // len(hits))

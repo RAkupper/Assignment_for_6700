@@ -7,9 +7,11 @@ RAG prototype: `/ask` now connects the team's `vectordb` retrieval to the new
 An installable FastAPI service skeleton for our course ML inference API. This week it
 exposes a typed `/health` endpoint; later assignments will put a model behind it.
 
-Update for HW2: it now has two models, a scikit-learn digit classifier inside the app
-(`/predict`) and Qwen2.5-1.5B-Instruct running in a llama.cpp container
-(`/generate`). We deploy it on Jetstream2 with `docker compose up -d`.
+HW2 added Qwen2.5-1.5B-Instruct in a llama.cpp container (`/generate`) and a
+scikit-learn digit classifier (`/predict`). `/predict` was removed in #44 once `/ask`
+replaced it; the HW2 blocking-call audit is still in [discussion.md](discussion.md)
+and the `blocking-before` and `blocking-after` tags. We deploy on Jetstream2 with
+`docker compose up -d`.
 
 Final project: the retrieval layer for RAG over U.S. immigration rules is in progress.
 Provision text from the ingestion catalog is embedded and stored in a Qdrant vector
@@ -180,22 +182,6 @@ Should return:
 {"status":"ready"}
 ```
 
-`/predict` takes the 64 pixel values (0-16) of an 8x8 image. This one is a 0. It takes
-about 1 s because of the `time.sleep(1)` we kept from the audit
-([discussion.md](discussion.md)).
-
-```bash
-curl -X POST $HOST/predict \
-  -H "Content-Type: application/json" \
-  -d '{"pixels":[0,0,5,13,9,1,0,0,0,0,13,15,10,15,5,0,0,3,15,2,0,11,8,0,0,4,12,0,0,8,8,0,0,5,8,0,0,9,8,0,0,4,11,0,1,12,7,0,0,2,14,5,10,12,0,0,0,0,6,13,10,0,0,0]}'
-```
-
-Should return:
-
-```json
-{"digit":0}
-```
-
 `/generate`:
 
 ```bash
@@ -213,9 +199,9 @@ Should return:
 Bad input returns 422:
 
 ```bash
-curl -i -X POST $HOST/predict \
+curl -i -X POST $HOST/ask \
   -H "Content-Type: application/json" \
-  -d '{"pixels":[1,2,3]}'
+  -d '{"question": ""}'
 ```
 
 Swagger docs are at `$HOST/docs`.
@@ -383,24 +369,11 @@ excluded. Options:
 
 ## How-to guides
 
-### Train and save the digits model
-
-Run the training script separately from the API:
-
-```bash
-uv run python scripts/train_digits.py
-```
-
-The script trains an SVM classifier on scikit-learn's built-in 8×8 digits dataset,
-evaluates it on a held-out 20% test split, and saves `models/digits.joblib`.
-The split uses a fixed random seed for reproducibility. No dataset download or
-GPU is needed. The model takes 64 pixel values (0–16) and predicts a digit (0–9).
-
-The saved model is intended to be loaded once at API startup when `/predict` is
-implemented; training does not run as part of service startup or a request.
-Keep `models/digits.joblib` with the project and include it in the Docker image.
-
 ### Measure concurrent prediction requests
+
+This reproduces the HW2 audit. `/predict` and `scripts/benchmark_predict.py` exist
+only at the `blocking-before` and `blocking-after` tags, which the steps below
+check out.
 
 Run these commands from the project root. Start on your working branch with
 local changes committed. Both `blocking-before` and `blocking-after` must be
@@ -533,7 +506,6 @@ sync.
 | `APP_NAME` | `assignment-for-6700` | Application title; must not be empty or whitespace-only. |
 | `APP_ENVIRONMENT` | `development` | Must be `development` or `production`. |
 | `APP_DEBUG` | `false` | Boolean debug flag; must be `false` in production. |
-| `APP_MODEL_PATH` | `models/digits.joblib` | Saved digits model loaded at startup; must point to an existing file. |
 
 Model settings use the `LLM_` prefix and are read by `ModelSettings` in the same
 file. The defaults need no model server (`LLM_PROVIDER=echo`), so tests and CI run
@@ -611,7 +583,6 @@ LLM_PROVIDER=openai uv run python scripts/bench_model.py   # latency check
 | POST   | `/generate` | `GenerateResponse` | Model completion for a prompt |
 | POST   | `/retrieve` | `list[Hit]` | Team hybrid retrieval; generation must be enabled |
 | POST   | `/ask` | `Answer` | Retrieved evidence → LLM answer with sources |
-| POST   | `/predict` | `PredictResponse` | Digit (0 to 9) for 64 pixel values (0 to 16) |
 | GET    | `/docs`   | HTML             | Auto-generated Swagger UI (FastAPI)      |
 
 `HealthResponse` fields:
@@ -650,7 +621,11 @@ See the [RAG guide](docs/rag-quickstart.md) for configuration and examples.
 
 Open `http://localhost:8000/` for the prototype UI. It uses the same API origin,
 displays readiness/errors, and opens source excerpts when a citation is selected.
-`/ask` also returns `status`: `answered` or `insufficient_evidence`.
+`/ask` also returns `status`: `answered` or `insufficient_evidence`. An
+insufficient-evidence answer says the indexed rules do not cover the question and
+points to the school's DSO (or the J-1 Responsible Officer), without calling the
+model. Each eCFR source has a `url` to its paragraph on ecfr.gov, dated to `as_of`
+when the question is historical.
 The prompt encourages inline citations, but the prototype does not enforce them
 or retry answers missing them. Retrieved evidence remains visible beside the
 answer. The UI links valid `[N]` labels to evidence cards and indicates when
@@ -674,16 +649,6 @@ curl -X POST http://127.0.0.1:8000/generate \
 With the default `LLM_PROVIDER=echo` the completion is the prompt itself, which
 confirms the wiring without a model server. Model failures return `504`, `503` or
 `502` as described under [Configuration](#configuration).
-
-`POST /predict` takes a `PredictRequest` and returns a `PredictResponse`. The
-prediction runs in a worker thread so the 1 s delay doesn't block other requests.
-
-| Model | Field | Type | Validation or example |
-| --- | --- | --- | --- |
-| `PredictRequest` | `pixels` | `list[int]` | Exactly 64 integers from 0 to 16, row by row from an 8×8 image, otherwise `422` |
-| `PredictResponse` | `digit` | `int` | 0 to 9, e.g. `0` |
-
-Example curl is in [Deploy with Compose](#3-test-the-endpoints).
 
 ### Project layout
 
@@ -719,15 +684,12 @@ Assignment_for_6700/
 │       ├── encoders.py        # EmbeddingSettings, dense BGE and sparse BM25 encoders
 │       ├── loader.py          # one-off task: catalog.sqlite into the next collection version
 │       └── search.py          # Searcher: hybrid search with date, visa and source filters
-├── models/digits.joblib       # trained digits classifier loaded at startup
 ├── docs/model-serving.md      # model architecture decision and measurements
 ├── docs/deployment.md         # running the stack on Jetstream2, measurements
 ├── docs/docker.md             # building and checking the app image
 ├── measurements/              # before/after results of the blocking-call audit
 ├── outputs/docker/            # raw Docker build logs and timings
 ├── scripts/bench_model.py     # latency benchmark through the service's client
-├── scripts/benchmark_predict.py  # ten concurrent /predict requests for the audit
-├── scripts/train_digits.py    # trains and saves models/digits.joblib
 └── tests/
     ├── conftest.py, fakes.py  # FakeModelClient and its fast and slow fixtures
     ├── test_config.py         # Settings validation tests

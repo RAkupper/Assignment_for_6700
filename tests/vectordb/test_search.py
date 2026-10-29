@@ -5,7 +5,7 @@ import pytest
 from qdrant_client import QdrantClient
 
 from myapp.vectordb.loader import build
-from myapp.vectordb.search import Hit, Searcher, SearchSettings
+from myapp.vectordb.search import Hit, Searcher, SearchSettings, source_url
 from tests.vectordb.conftest import FakeEncoder, make_catalog
 
 CAMPUS = "8 CFR 214.2(f)(9)(i)"
@@ -110,6 +110,7 @@ def test_returns_k_hits_in_the_agreed_shape(searcher: Searcher) -> None:
         "visa_types",
         "valid_from",
         "valid_to",
+        "url",
     }
 
 
@@ -179,3 +180,43 @@ def test_settings_set_the_defaults(searcher: Searcher) -> None:
     )
     assert strict.search("employment") == []
     assert len(strict.search("employment", min_relevance=0.0)) == 1
+
+
+def test_ecfr_hits_link_to_their_paragraph(searcher: Searcher) -> None:
+    found = searcher.search("employment fees", k=10, include_proposed=True)
+    hits = {h.provision_id: h for h in found}
+    assert hits[CAMPUS].url == (
+        "https://www.ecfr.gov/current/title-8/section-214.2#p-214.2(f)(9)(i)"
+    )
+    assert hits[FEE].url is None
+
+
+def test_historical_search_links_to_the_text_on_that_date(searcher: Searcher) -> None:
+    hits = searcher.search("on-campus employment hours", k=10, as_of=date(2023, 6, 1))
+    campus = next(h for h in hits if h.provision_id == CAMPUS)
+    assert campus.url == (
+        "https://www.ecfr.gov/on/2023-06-01/title-8/section-214.2#p-214.2(f)(9)(i)"
+    )
+
+
+@pytest.mark.parametrize(
+    ("provision_id", "url"),
+    [
+        ("8 CFR 214.3", "https://www.ecfr.gov/current/title-8/section-214.3"),
+        (
+            '8 CFR 214.1(a)(2) "Nonimmigrant"',
+            "https://www.ecfr.gov/current/title-8/section-214.1#p-214.1(a)(2)",
+        ),
+        (
+            "22 CFR 62.23(g)",
+            "https://www.ecfr.gov/current/title-22/section-62.23#p-62.23(g)",
+        ),
+        (
+            "8 CFR 274a.12(c)(3)",
+            "https://www.ecfr.gov/current/title-8/section-274a.12#p-274a.12(c)(3)",
+        ),
+        ("not a citation", None),
+    ],
+)
+def test_source_url_forms(provision_id: str, url: str | None) -> None:
+    assert source_url(provision_id, "ecfr") == url

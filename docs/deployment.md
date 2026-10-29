@@ -10,7 +10,6 @@ TEAM02 (Jetstream2 m3.small: 2 vCPUs, 6 GB RAM, 20 GB root disk + 40 GB volume)
 ├── app   container, port 8000 (public)
 │     ├── GET  /health    the app process is up
 │     ├── GET  /ready     configured LLM and enabled retrieval dependencies are ready
-│     ├── POST /predict   digits classifier (scikit-learn), loaded inside the app
 │     ├── POST /generate  asks the llm container over the compose network
 │     ├── POST /retrieve  returns matching provisions from Qdrant
 │     └── POST /ask       retrieves evidence and generates a cited answer
@@ -23,8 +22,6 @@ TEAM02 (Jetstream2 m3.small: 2 vCPUs, 6 GB RAM, 20 GB root disk + 40 GB volume)
       └── ingestion and Qdrant loading, writes /data on the volume
 ```
 
-- The digits model is a 91 KB file (`models/digits.joblib`) that ships inside the
-  app image, so `/predict` works even when the LLM is down.
 - The LLM runs in its own container so the app image stays small and the model can
   be swapped through env vars. `/generate` returns 503 and `/ready` returns 503
   while it is unavailable; `/health` stays 200.
@@ -164,9 +161,9 @@ The m3.small has 2 vCPUs and 6 GB RAM, shared by every container.
   Run loads when nobody is testing, and say so in the group chat.
 - `llm` runs two slots with 4096 tokens each (`-c 8192 -np 2`), and the app lets at
   most that many questions use them (`GENERATION_MAX_CONCURRENT`, set from
-  `LLM_PARALLEL`). A third question waits up to `GENERATION_QUEUE_TIMEOUT_S` (30 s)
-  for a slot, then gets 503 "busy". `/retrieve` does not call the model and is not
-  limited. Change both slot settings together: `LLM_CTX_SIZE` is 4096 times
+  `LLM_PARALLEL`). A third question waits up to `GENERATION_QUEUE_TIMEOUT_S` (60 s)
+  for a slot, then gets 503 "busy". `/retrieve` and questions the index cannot
+  answer do not call the model, so they never wait for a slot. Change both slot settings together: `LLM_CTX_SIZE` is 4096 times
   `LLM_PARALLEL`.
 
 Measured on TEAM02 on Oct 28, full 8 CFR 214 index (3,882 points):
@@ -178,11 +175,16 @@ Measured on TEAM02 on Oct 28, full 8 CFR 214 index (3,882 points):
 | One `/ask` prompt | about 1,400 tokens |
 | 3 `/ask` at once, 4 slots on one 4096 cache | all 503 after 47 s: "Context size has been exceeded" |
 | 3 identical `/ask` at once, `-c 8192 -np 2` | all 200 in 48 to 49 s; llm at 1.0 of 3 GB |
+| 3 different `/ask` at once, 30 s queue timeout | 200 in 43 s and 46 s; third 503 "busy" at 30 s |
+| Same 3 again right after, 60 s queue timeout | 200 in 3, 17 and 21 s (prompts reused from llama.cpp's cache) |
+| 3 new `/ask` at once after restarting `llm`, 60 s queue timeout | all 200 in 33 to 35 s |
 
 On two cores, two questions at once each take about as long as two in a row, so
 expect about 20 s for one question, 48 s for two at once, and a third to wait for
-a slot. The identical questions above let the third reuse a cached prompt, so a
-different third question will take longer.
+a slot. With a 30 s wait, the third always gave up about 15 s before a slot freed,
+so the default is 60 s: a waiting answer still finishes well inside the 120 s LLM
+timeout. llama.cpp keeps each slot's last prompt, so a repeated question can take
+a few seconds; restart `llm` before measuring cold latency.
 
 ## Load the regulations into Qdrant
 
@@ -215,13 +217,7 @@ curl -X POST http://<public-ip>:8000/generate \
 curl -X POST http://<public-ip>:8000/ask \
   -H "Content-Type: application/json" \
   -d '{"question": "What does Form I-983 relate to?", "visa_type": "F-1"}'
-curl -X POST http://<public-ip>:8000/predict \
-  -H "Content-Type: application/json" \
-  -d '{"pixels":[0,0,7,15,13,1,0,0,0,8,13,6,15,4,0,0,0,2,1,13,13,0,0,0,0,0,2,15,11,1,0,0,0,0,0,1,12,12,1,0,0,0,0,0,1,10,8,0,0,0,8,4,5,14,9,0,0,0,7,13,13,9,0,0]}'
 ```
-
-The `/predict` example is a handwritten 3 from scikit-learn's digits dataset, so
-the answer should be `{"digit":3}`.
 
 Qdrant must not answer from outside. This should time out or be refused:
 
@@ -268,7 +264,7 @@ LLM_MODEL=Qwen/Qwen2.5-14B-Instruct-AWQ
 | `ssh` times out | TEAM02 is shelved, or the IP changed after an unshelve. Check Exosphere. |
 | `ssh` says the host key changed | You are using an old IP that now belongs to another machine. Get the current IP from Exosphere. |
 | `/generate` or `/ready` returns 503 | The llm container is not ready. Check `docker compose ps` and `docker compose logs llm`. |
-| `app` keeps restarting | Usually a config error at startup. `docker compose logs app` shows which setting failed validation, e.g. a missing `models/digits.joblib`. |
+| `app` keeps restarting | Usually a config error at startup. `docker compose logs app` shows which setting failed validation, e.g. `LLM_PROVIDER=echo` in production. |
 | Build fails with "no space left on device" | Check `df -h /`; remove old images with `docker image prune`. Do not delete the `llm-models` volume unless you want to download the model again. |
 | Docker does not start after an unshelve | The volume is not attached or not mounted, so the `RequiresMountsFor` rules hold Docker and containerd back. Check **Volumes** in Exosphere, then `sudo mount -a && sudo systemctl start containerd docker`. If the volume was reattached under a new device name (`lsblk`), mask `automount-volume@<name>.service` too. |
 | `app` never starts, `qdrant` is unhealthy | `docker compose logs qdrant`. Usually the volume is not mounted or `DATA_VOLUME_DIR` in `.env` is wrong. |

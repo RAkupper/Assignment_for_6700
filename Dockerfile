@@ -30,7 +30,6 @@ RUN useradd --create-home --uid 10001 appuser
 
 # Copy the installed application and dependencies
 COPY --from=builder /app/.venv /app/.venv
-COPY models/ ./models/
 
 USER appuser
 
