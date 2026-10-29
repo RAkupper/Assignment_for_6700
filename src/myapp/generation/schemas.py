@@ -1,6 +1,7 @@
 """API request and answer shapes for retrieval-grounded generation."""
 
 from datetime import date
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -23,3 +24,4 @@ class Answer(BaseModel):
     answer: str
     # Citation [1] corresponds to sources[0]; text is the excerpt sent to the LLM.
     sources: list[Hit]
+    status: Literal["answered", "insufficient_evidence"] = "answered"

@@ -4,11 +4,13 @@ import asyncio
 import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Annotated, Literal
 
 import joblib  # type: ignore[import-untyped]  # joblib does not ship type information.
 from fastapi import Depends, FastAPI, HTTPException, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field
 
 from myapp.config import Settings
@@ -53,6 +55,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 app = FastAPI(
     title=settings.name, version="0.1.0", debug=settings.debug, lifespan=lifespan
 )
+web_dir = Path(__file__).with_name("web")
+app.mount("/assets", StaticFiles(directory=web_dir), name="assets")
+
+
+@app.get("/", include_in_schema=False)
+def index() -> FileResponse:
+    """Serve the same-origin prototype UI without a separate frontend server."""
+    return FileResponse(web_dir / "index.html")
 
 
 def get_model_client(request: Request) -> ModelClient:
