@@ -159,10 +159,55 @@ The loader currently uses one provision version per chunk, with parent lead-in
 context also passed to the generation prompt. The character budget
 does not guarantee an exact token limit. `SEARCH_MIN_RELEVANCE` is 0.65, following
 the ingestion PR's evaluation; broader evaluation is still needed and retrieved
-evidence may be insufficient. Citations are
-requested in the prompt but are not automatically verified. Incremental sync and
+evidence may be insufficient. Citations are encouraged, but their presence and
+factual support are not enforced. Incremental sync and
 snapshots remain unimplemented. Readiness checks model availability and index
 metadata; they do not prove that inference succeeds or answers are accurate.
-Real-data/model smoke tests and Jetstream2 deployment validation remain necessary.
+Local smoke-test observations are recorded in [prototype-smoke.md](prototype-smoke.md).
+Rerun live checks after changes; Jetstream2 deployment validation remains necessary.
 Qwen is the current prototype default;
 the team's final generation model is still to be agreed.
+
+## Prototype UI and live smoke test
+
+Open `http://localhost:8000/` after starting app. The English interface supports
+questions, visa/date filters, service readiness, loading/error states, and source
+inspection. Selecting a numbered citation opens and focuses the corresponding
+evidence card. It does not imply that a sentence has been fact-checked.
+
+The model returns ordinary text. The prompt encourages `[N]` source references,
+but citation presence is optional for this prototype: there is no JSON constraint,
+quote matching, rejection, or automatic retry. The UI makes valid references
+clickable; without them, it displays the answer and retrieved evidence with a note.
+Empty retrieval returns `status=insufficient_evidence` without calling the model.
+Normal responses use `status=answered`. The API does not verify factual entailment.
+
+Responses are capped at 256 generated tokens by default. Inline references and
+answer accuracy remain items for manual evaluation and future model improvements.
+
+```bash
+python scripts/smoke_rag.py
+```
+
+The script checks health/readiness, verifies the known on-campus provision is
+retrieved, and checks that generation returns a nonempty answer and evidence.
+It reports citation presence as informational, not a pass/fail requirement.
+It prints counts and timing, not source contents or questions. This operational
+smoke test does not certify answer accuracy or attribution quality.
+
+## Where local data lives
+
+With the default `DATA_VOLUME_DIR=./volume`:
+
+- `volume/data/catalog.sqlite`: parsed provisions and ingestion history.
+- `volume/data/raw/`: downloaded raw snapshots.
+- `volume/qdrant/`: vectors, source text, and metadata used by retrieval.
+- `volume/embed-cache/`: downloaded BGE/BM25 resources.
+- `llm-models`: Docker-managed volume containing generation model files.
+
+`volume/`, `data/`, and `.env` are excluded from Git and Docker build context.
+Ordinary `git add`/`git commit` therefore excludes runtime data and local secrets;
+do not force-add ignored files. Model weights in Docker volumes are also outside
+the repository. Deleting/recreating containers preserves bind-mounted files;
+explicitly deleting storage is a separate operation. The local smoke dataset
+created during the walkthrough contains one 2026-09-30 snapshot, not full history.

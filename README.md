@@ -553,7 +553,7 @@ anywhere.
 
 Those are the code defaults. Under Compose they're set for the llama.cpp container
 (`LLM_PROVIDER=openai`, `LLM_BASE_URL=http://llm:8080/v1`,
-`LLM_MODEL=qwen2.5-1.5b-instruct`, `LLM_MAX_TOKENS=128`).
+`LLM_MODEL=qwen2.5-1.5b-instruct`, `LLM_MAX_TOKENS=256`).
 
 Model failures reach clients as `504` (timeout), `503` (server unreachable or
 erroring) or `502` (malformed reply). See
@@ -605,6 +605,7 @@ LLM_PROVIDER=openai uv run python scripts/bench_model.py   # latency check
 
 | Method | Path      | Response model   | Description                              |
 | ------ | --------- | ---------------- | ---------------------------------------- |
+| GET    | `/` | HTML | English prototype interface with clickable evidence citations |
 | GET    | `/health` | `HealthResponse` | Liveness check with service version     |
 | GET    | `/ready` | `ReadyResponse` | Configured model and enabled retrieval dependencies |
 | POST   | `/generate` | `GenerateResponse` | Model completion for a prompt |
@@ -646,6 +647,18 @@ and `include_proposed`. It returns `answer` and `sources`; citation `[1]` refers
 the first source. `POST /retrieve` accepts the same request and returns passages
 without generating. Compose enables `GENERATION_ENABLED=true` by default.
 See the [RAG guide](docs/rag-quickstart.md) for configuration and examples.
+
+Open `http://localhost:8000/` for the prototype UI. It uses the same API origin,
+displays readiness/errors, and opens source excerpts when a citation is selected.
+`/ask` also returns `status`: `answered` or `insufficient_evidence`.
+The prompt encourages inline citations, but the prototype does not enforce them
+or retry answers missing them. Retrieved evidence remains visible beside the
+answer. The UI links valid `[N]` labels to evidence cards and indicates when
+inline references are absent. Answers and attribution require manual review.
+
+Run `python scripts/smoke_rag.py` against the running Docker stack for a focused
+live test. Runtime data under `volume/` and private `.env` files are gitignored;
+committing application code does not include these files.
 
 | Model | Field | Type | Validation or example |
 | --- | --- | --- | --- |
@@ -700,6 +713,7 @@ Assignment_for_6700/
 │   ├── generation/
 │   │   ├── schemas.py        # QuestionRequest and Answer
 │   │   └── service.py        # GenerationSettings; Searcher → prompt → existing LLM client
+│   ├── web/                  # packaged HTML, CSS and JavaScript for the prototype UI
 │   └── vectordb/
 │       ├── collection.py      # QdrantSettings, versions, alias swap, status and activate CLI
 │       ├── encoders.py        # EmbeddingSettings, dense BGE and sparse BM25 encoders
