@@ -204,6 +204,7 @@ def test_empty_search_does_not_call_model(
     ).json()
     assert body["sources"] == []
     assert "Insufficient evidence" in body["answer"]
+    assert "DSO" in body["answer"]
     assert model.prompts == []
 
 
@@ -578,3 +579,26 @@ def test_failed_generation_frees_its_slot(
     assert client.post("/ask", json={"question": "Form I-983"}).status_code == 504
     model.error = None
     assert client.post("/ask", json={"question": "Form I-983"}).status_code == 200
+
+
+def test_not_covered_answer_does_not_wait_for_a_busy_slot(
+    api: tuple[TestClient, FakeModelClient],
+    generation: GenerationService,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client, model = api
+    started, release = _held_api(generation, model, monkeypatch, 1, 5.0)
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first = pool.submit(client.post, "/ask", json={"question": "Form I-983"})
+        try:
+            assert started.wait(timeout=5)
+            empty = client.post(
+                "/ask",
+                json={"question": "employment", "sources": ["uscis_policy_manual"]},
+            )
+            assert empty.status_code == 200
+            assert empty.json()["status"] == "insufficient_evidence"
+            assert first.running()
+        finally:
+            release.set()
+        assert first.result(timeout=5).status_code == 200

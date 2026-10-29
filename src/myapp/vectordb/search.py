@@ -10,6 +10,7 @@ from a plain `def` endpoint or through `asyncio.to_thread`, never bare inside
 
 import argparse
 import math
+import re
 from collections.abc import Sequence
 from datetime import UTC, date, datetime
 from typing import Any, Protocol, cast
@@ -60,6 +61,7 @@ class Hit(BaseModel):
     visa_types: list[str]
     valid_from: str | None
     valid_to: str | None
+    url: str | None = None  # official text, as it read on the search's as_of date
 
 
 def build_filter(
@@ -161,7 +163,7 @@ class Searcher:
             with_payload=True,
             with_vectors=[DENSE],
         )
-        hits = [_hit(p, _cosine(q.dense, _dense_of(p))) for p in result.points]
+        hits = [_hit(p, _cosine(q.dense, _dense_of(p)), as_of) for p in result.points]
         return [h for h in hits if h.relevance >= cutoff]
 
 
@@ -176,7 +178,22 @@ def _cosine(a: list[float], b: list[float]) -> float:
     return sum(x * y for x, y in zip(a, b, strict=True)) / norm if norm else 0.0
 
 
-def _hit(point: models.ScoredPoint, relevance: float) -> Hit:
+# "8 CFR 214.2(f)(9)(i)" and definitions like '8 CFR 214.1(a)(2) "term"'
+CFR_CITATION = re.compile(r"^(\d+) CFR (\d+[a-z]?\.\d+[a-z]?)((?:\([^()\s]+\))*)")
+
+
+def source_url(provision_id: str, source: str, as_of: date | None = None) -> str | None:
+    """eCFR link to the paragraph; a dated link when the question is historical."""
+    match = CFR_CITATION.match(provision_id) if source == "ecfr" else None
+    if match is None:
+        return None
+    title, section, paragraphs = match.groups()
+    when = f"on/{as_of.isoformat()}" if as_of else "current"
+    anchor = f"#p-{section}{paragraphs}" if paragraphs else ""
+    return f"https://www.ecfr.gov/{when}/title-{title}/section-{section}{anchor}"
+
+
+def _hit(point: models.ScoredPoint, relevance: float, as_of: date | None = None) -> Hit:
     p = point.payload or {}
     return Hit(
         provision_id=p["provision_id"],
@@ -191,6 +208,7 @@ def _hit(point: models.ScoredPoint, relevance: float) -> Hit:
         visa_types=p.get("visa_types", []),
         valid_from=p.get("valid_from"),
         valid_to=p.get("valid_to"),
+        url=source_url(p["provision_id"], p["source"], as_of),
     )
 
 

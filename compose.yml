@@ -90,7 +90,7 @@ services:
       GENERATION_MAX_CONTEXT_CHARS: ${GENERATION_MAX_CONTEXT_CHARS:-6000}
       # Same number as llama.cpp's slots, so the app never overfills them.
       GENERATION_MAX_CONCURRENT: ${LLM_PARALLEL:-2}
-      GENERATION_QUEUE_TIMEOUT_S: ${GENERATION_QUEUE_TIMEOUT_S:-30}
+      GENERATION_QUEUE_TIMEOUT_S: ${GENERATION_QUEUE_TIMEOUT_S:-60}
     volumes:
       - ${DATA_VOLUME_DIR:-./volume}/embed-cache:/embed-cache
     ports:

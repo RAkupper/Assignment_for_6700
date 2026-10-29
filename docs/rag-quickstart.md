@@ -107,6 +107,8 @@ Only `question` is required. Omitted filters use the team's retrieval defaults.
 | `QDRANT_*`, `EMBED_*`, `SEARCH_*` | Team retrieval connection, models, and search settings |
 | `GENERATION_ENABLED` | Initialize retrieval and enable question answering at startup |
 | `GENERATION_MAX_CONTEXT_CHARS` | Evidence text budget, default 6000 characters |
+| `GENERATION_MAX_CONCURRENT` | Questions using the model at once; Compose sets it from `LLM_PARALLEL` (2) |
+| `GENERATION_QUEUE_TIMEOUT_S` | Seconds a question waits for a model slot before 503 busy, default 60 |
 | `LLM_*` | Existing generation model client settings |
 
 Compose reads `.env.production.example`, then an optional `.env` for overrides.
@@ -179,7 +181,8 @@ The model returns ordinary text. The prompt encourages `[N]` source references,
 but citation presence is optional for this prototype: there is no JSON constraint,
 quote matching, rejection, or automatic retry. The UI makes valid references
 clickable; without them, it displays the answer and retrieved evidence with a note.
-Empty retrieval returns `status=insufficient_evidence` without calling the model.
+Empty retrieval returns `status=insufficient_evidence` without calling the model,
+with an answer that points to the school's DSO.
 Normal responses use `status=answered`. The API does not verify factual entailment.
 
 Responses are capped at 256 generated tokens by default. Inline references and
