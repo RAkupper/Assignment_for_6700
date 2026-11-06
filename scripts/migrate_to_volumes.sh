@@ -19,7 +19,7 @@ copy() {  # copy <service> <folder under src> <path in container> [owner]
     -c "cp -a /from/. '$3'/ ${4:+&& chown -R $4 '$3'}"
 }
 
-docker compose build jobs
+docker compose build app jobs  # up below must start the new app, not the old image
 before=$(mktemp)
 after=$(mktemp)
 check -v "$src/data:/data" > "$before"  # --no-deps keeps the old qdrant container running

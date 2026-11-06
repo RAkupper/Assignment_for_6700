@@ -167,11 +167,17 @@ git pull
 scripts/migrate_to_volumes.sh /media/volume/team02-data
 ```
 
-The script records the alias, collections, point counts and catalog integrity from the
-running stack, stops app and qdrant, copies each folder into its volume, starts
-everything, and checks the same things again. It prints `migrated` when they match and
+The script builds the new app and jobs images, records the alias, collections, point
+counts and catalog integrity from the running stack, stops app and qdrant, copies each
+folder into its volume, starts everything on the new images, and checks the same
+things again. It prints `migrated` when they match and
 exits with an error otherwise. It never changes the old folders, so a failed run can
 simply be repeated.
+
+Measured Nov 6 on a copy of TEAM02's data (3,882 points, catalog 17 MB), starting from
+the main branch's stack: 25 s, before and after identical, the app afterwards on
+`127.0.0.1:8000` only. The volumes came out the same size as the folders (Qdrant 25 MB,
+its files stay sparse).
 
 Once it passes, remove `DATA_VOLUME_DIR` from `.env`; Compose no longer reads it.
 Keep the old folders until a backup has been restored successfully (#52), then
