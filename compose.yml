@@ -1,5 +1,6 @@
 # Service stack: the FastAPI app, the model server it calls over HTTP, and the
-# Qdrant vector database, with generation enabled for /ask.
+# Qdrant vector database, with generation enabled for /ask. With
+# COMPOSE_PROFILES=proxy, Caddy serves the app over HTTPS at APP_DOMAIN.
 # How to start, check and troubleshoot it on Jetstream2:
 # docs/deployment.md
 #
@@ -52,7 +53,7 @@ services:
 
   # No "ports": 6333 is reachable only from containers on this network.
   qdrant:
-    image: qdrant/qdrant:v1.19.2
+    image: qdrant/qdrant:v1.19.2@sha256:b7b0444c4c351c970b98e90a6f89c2ee4287c65b44e52b4cb503fa5b2aa927ad
     environment:
       QDRANT__TELEMETRY_DISABLED: "true"
     volumes:
@@ -91,15 +92,33 @@ services:
       # Same number as llama.cpp's slots, so the app never overfills them.
       GENERATION_MAX_CONCURRENT: ${LLM_PARALLEL:-2}
       GENERATION_QUEUE_TIMEOUT_S: ${GENERATION_QUEUE_TIMEOUT_S:-60}
+      FORWARDED_ALLOW_IPS: ${FORWARDED_ALLOW_IPS:-127.0.0.1}  # "*" only behind Caddy
     volumes:
       - ${DATA_VOLUME_DIR:-./volume}/embed-cache:/embed-cache
     ports:
-      - "8000:8000"
+      - "${APP_BIND:-127.0.0.1}:8000:8000"  # this machine only; outside goes via Caddy
     depends_on:
       llm:
         condition: service_healthy
       qdrant:
         condition: service_healthy
+    restart: unless-stopped
+
+  caddy:  # HTTPS for APP_DOMAIN; runs with COMPOSE_PROFILES=proxy in .env
+    image: caddy:2.11.9@sha256:c2aeffaeb80d5403e9c8d1d908b50e191aad204e16129f991ae357ada642094d
+    profiles: [proxy]
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN:-localhost}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data  # the certificate; losing it means asking for a new one
+      - caddy-config:/config
+    depends_on:
+      - app
     restart: unless-stopped
 
   # One-off ingestion and loading tasks, never started by "docker compose up":
@@ -132,3 +151,5 @@ services:
 volumes:
   llm-models:
     name: llm-models
+  caddy-data:
+  caddy-config:

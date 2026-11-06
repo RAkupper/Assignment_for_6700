@@ -17,7 +17,10 @@ def isolate_local_service_settings(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("LLM_PROVIDER", "echo")
     monkeypatch.setenv("GENERATION_ENABLED", "false")
     monkeypatch.setattr(app_module.settings.llm, "provider", "echo")
+    monkeypatch.setattr(app_module.settings, "admin_api_key", None)
     monkeypatch.setattr(app_module.generation_settings, "enabled", False)
+    app_module.asks.clear()  # every test starts under the rate limits
+    app_module.retrievals.clear()
 
 
 @pytest.fixture
