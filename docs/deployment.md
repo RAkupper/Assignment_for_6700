@@ -164,7 +164,8 @@ The m3.small has 2 vCPUs and 6 GB RAM, shared by every container.
 - `llm` runs two slots with 4096 tokens each (`-c 8192 -np 2`), and the app lets at
   most that many questions use them (`GENERATION_MAX_CONCURRENT`, set from
   `LLM_PARALLEL`). A third question waits up to `GENERATION_QUEUE_TIMEOUT_S` (60 s)
-  for a slot, then gets 503 "busy". `/retrieve` and questions the index cannot
+  for a slot, then gets the retrieved passages with `status: "model_unavailable"`.
+  Measured Nov 6, six questions at once still all got answers within 64 s. `/retrieve` and questions the index cannot
   answer do not call the model, so they never wait for a slot. Change both slot settings together: `LLM_CTX_SIZE` is 4096 times
   `LLM_PARALLEL`.
 
@@ -259,6 +260,55 @@ curl -m 5 http://<public-ip>:6333/  # refused or times out (Qdrant)
 Without a key, `/admin/generate` answers 404 when `APP_ADMIN_API_KEY` is unset and
 401 when it is set. The 11th `/ask` within a minute from one address answers 429.
 
+## Time limits and retries
+
+Every wait on another program has a limit, and each layer gives up after the one
+behind it, so the user sees the inner layer's clear answer instead of a hung page:
+
+| Layer | Gives up after | Then the user sees |
+| --- | --- | --- |
+| A question waiting for an answer slot | 60 s (`GENERATION_QUEUE_TIMEOUT_S`) | the passages, `status: "model_unavailable"` |
+| The model call, retries included | 120 s (`LLM_TIMEOUT_S`) | the passages, `status: "model_unavailable"` |
+| Caddy waiting for the app | 200 s (`response_header_timeout` in `Caddyfile`) | "The answer took too long" (504) |
+| The page waiting for Caddy | 210 s (`ASK_LIMIT_MS` in `app.js`) | "The answer took too long" |
+
+The app's worst case is about 185 s: a full queue wait, then a model call that runs
+out its budget. Caddy's 200 s sits above that, so Caddy only answers 504 when the app
+itself is stuck. A stopped app gets a 502 at once, which the page shows as "The
+service is restarting".
+
+Retries happen in one place, the model client, so they don't multiply (page × app ×
+client). It retries only when nothing was generated: the connection was refused or
+never opened, or llama.cpp answered 429, 502 or 503 (still loading, or full). It waits with exponential
+backoff and full jitter, so many requests failing together don't come back together.
+It honors `Retry-After`, and gives up at once if the server asks for more than
+`LLM_RETRY_MAX_WAIT_S`. A read timeout is never retried: the model may still be
+working, and a second request would double its load. Ingestion's `PoliteClient`,
+which retries federal sites on 429 and 5xx, now jitters its backoff too, but never
+below half of it, to stay polite.
+
+`LLM_MAX_RETRIES` is 3 because a llama.cpp restart took 2.8 s until it served again.
+With a question sent 0.5 s into a restart, 2 retries answered 3 of 8 times and 3
+retries 7 of 8; the rest got the passages.
+
+Measured Nov 6 through Caddy on a 2-CPU, 7 GB machine (TEAM02 has 2 vCPUs, 6 GB), with
+Qwen2.5-1.5B Q4_K_M, the real 8 CFR 214 index, and the page in Chrome:
+
+| What happened | What the user got |
+| --- | --- |
+| One question, model just restarted | answer in 18.7 s |
+| 3 questions at once (2 slots) | all answered, in 22, 29 and 37 s |
+| 6 questions at once (5 need the model) | all answered within 64 s; the queue never hit 60 s |
+| Queue limit set to 5 s, 3 at once | 2 answered; the third got its passages at 5.2 s |
+| llm stopped | passages in 1.4 s (2 retries) and 5.3 s on the page (3 retries) |
+| llm frozen | passages at 120.1 s |
+| App stopped, page already open | "The service is restarting" at once (Caddy 502 in 0.01 s) |
+| App frozen | "The answer took too long" at 200.1 s (Caddy 504 at 200.0 s) |
+| 11th question in a minute | "Too many requests: at most 10 a minute. Try again in 60 seconds." |
+
+`scripts/smoke_rag.py` passed on the healthy stack (13.4 s) and failed with llm
+stopped, so an evidence-only answer can't pass for a working one.
+
 ## Everyday commands (on the instance, in `~/Assignment_for_6700`)
 
 | Task | Command |
@@ -290,6 +340,36 @@ instead of the local llm container, put this in `.env` and run `docker compose u
 LLM_BASE_URL=http://10.1.82.181:8000/v1
 LLM_MODEL=Qwen/Qwen2.5-14B-Instruct-AWQ
 ```
+
+## When something breaks
+
+A tester writes "it's been down for an hour". Check in this order, on the instance:
+
+1. `docker compose ps`. `Restarting (1)` is a crash loop; `unhealthy` means the
+   health check fails; a missing service means it was stopped (`unless-stopped` keeps a
+   stopped container down, even after a reboot).
+2. `docker compose logs --tail 50 app` (or `llm`, `qdrant`, `caddy`). A crash loop
+   usually ends in a settings `ValidationError` that names the variable. Restarting
+   won't fix a bad setting; fix `.env` and `docker compose up -d`.
+3. `curl -s localhost:8000/ready`. It names the missing dependency: the model, the
+   Qdrant alias, or an empty index.
+4. `df -h / /media/volume/team02-data` and `free -m`. A full disk or memory stops
+   Docker, Qdrant or llama.cpp before any log says why.
+5. From your laptop, `curl -I https://<name>/health`. A 502 means Caddy is up and
+   the app isn't; no answer at all means Caddy, the instance or the IP is down (the IP
+   can change on unshelve).
+
+| What users report | Most likely | Check |
+| --- | --- | --- |
+| "The answer took too long" | the model is slow or stuck | `docker compose logs llm`, `docker stats` |
+| "No written answer right now" on every question | llm is down or unhealthy | `docker compose ps llm`; the passages still work |
+| "Too many requests" for everyone | everyone shares Caddy's address | `FORWARDED_ALLOW_IPS=*` in `.env` |
+| "The service is restarting" for minutes | app crash loop | steps 1 and 2 |
+| Answers cite old rules | the alias points at an old collection | `python -m myapp.vectordb.collection status` via jobs |
+
+After anything users noticed, write a short postmortem from
+[postmortems/TEMPLATE.md](postmortems/TEMPLATE.md) as
+`docs/postmortems/<date>-<what>.md`, and link it in the group chat.
 
 ## Troubleshooting
 

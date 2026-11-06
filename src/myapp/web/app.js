@@ -9,10 +9,20 @@ const readiness = document.getElementById("readiness");
 const results = document.getElementById("results");
 const sourcesPanel = document.getElementById("sources");
 
+const ASK_LIMIT_MS = 210000; // past Caddy's 200 s, so the proxy's answer arrives first
+
+const PLAIN_ERRORS = { // Caddy's 502 and 504 have no JSON body
+  502: "The service is restarting. Try again in a moment.",
+  504: "The answer took too long. Try again in a minute.",
+};
+
 async function readResponse(response) {
   const body = await response.json().catch(() => ({}));
   if (!response.ok) {
-    const message = typeof body.detail === "string" ? body.detail : `Request failed (HTTP ${response.status}).`;
+    let message = typeof body.detail === "string" ? body.detail
+      : PLAIN_ERRORS[response.status] ?? `Request failed (HTTP ${response.status}).`;
+    const wait = Number(response.headers.get("Retry-After"));
+    if (response.status === 429 && wait > 0) message = `${message.replace(/\.?$/, ".")} Try again in ${wait} seconds.`;
     throw new Error(message);
   }
   return body;
@@ -104,15 +114,19 @@ form.addEventListener("submit", async event => {
   try {
     const body = await readResponse(await fetch("/ask", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload), signal: AbortSignal.timeout(250000),
+      body: JSON.stringify(payload), signal: AbortSignal.timeout(ASK_LIMIT_MS),
     }));
     renderSources(body.sources);
     renderAnswer(body.answer, body.sources.length);
-    document.getElementById("answer-heading").textContent = body.status === "answered"
-      ? "Here is what the sources say." : "Review the available evidence.";
+    const headings = {
+      answered: "Here is what the sources say.",
+      model_unavailable: "No written answer right now.",
+    };
+    document.getElementById("answer-heading").textContent = headings[body.status] ?? "Review the available evidence.";
     const hasReferences = document.querySelector("#answer .citation") !== null;
     document.getElementById("answer-note").textContent = body.status === "insufficient_evidence"
       ? "The index did not return enough evidence for this question."
+      : body.status === "model_unavailable" ? "The passages below matched your question. Try again in a minute for a written answer."
       : hasReferences ? "Select a numbered citation to inspect its source passage."
       : "The model did not add inline citations. Retrieved evidence is listed alongside for review.";
     results.hidden = false;
