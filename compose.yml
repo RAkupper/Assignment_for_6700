@@ -131,6 +131,8 @@ services:
         required: true
       - path: .env
         required: false
+      - path: .env.backup  # BACKUP_GITHUB_TOKEN: only jobs gets it, never the app
+        required: false
     environment:
       QDRANT_URL: ${QDRANT_URL:-http://qdrant:6333}
       INGEST_DATA_DIR: /data

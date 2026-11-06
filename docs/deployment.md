@@ -180,8 +180,8 @@ the main branch's stack: 25 s, before and after identical, the app afterwards on
 its files stay sparse).
 
 Once it passes, remove `DATA_VOLUME_DIR` from `.env`; Compose no longer reads it.
-Keep the old folders until a backup has been restored successfully (#52), then
-delete them:
+Keep the old folders until a backup has been taken and the
+[restore drill](#restore-drill) passes, then delete them:
 
 ```bash
 sudo rm -rf /media/volume/team02-data/{data,embed-cache,qdrant,qdrant-snapshots}
@@ -261,6 +261,128 @@ The loader builds a new collection
 and moves the `provisions` alias to it. To roll back, move the alias back:
 `docker compose run --rm jobs python -m myapp.vectordb.collection activate provisions_v1`.
 
+After every load that changes the data, take a backup: `scripts/backup.sh`.
+A full load measured Nov 6 took 19.5 min on one CPU, with `jobs` peaking at 2.3 GB
+of memory, so run it when nobody is testing.
+
+## Backups off Jetstream2
+
+A backup is a `data-<UTC time>` release in this repo, so it outlives TEAM02, the
+Jetstream2 allocation and anyone's laptop. The repo is public and so is the data
+(federal regulation text). `.env` and keys are never included. Each release holds:
+
+| Asset | What |
+| --- | --- |
+| `catalog.sqlite` | the catalog, copied with SQLite's backup API (safe while in use) |
+| `data-files.tar.gz` | everything else in `/data`: raw downloads, manual captures |
+| `qdrant.snapshot` | a Qdrant snapshot of the collection the `provisions` alias points to |
+| `manifest.json` | sha256 and size of each file, the collection, point count, embedding model, catalog schema and row count |
+
+Measured Nov 6 on a copy of TEAM02's data (3,882 points): 43 MB per backup
+(`catalog.sqlite` 4.1 MB, `data-files.tar.gz` 13.6 MB, `qdrant.snapshot` 25.4 MB),
+made in 5 s. The newest 5 are kept; older releases and their tags are deleted after
+each upload.
+
+### Token (once)
+
+Uploading needs a fine-grained token. Fine-grained tokens only reach repos owned by
+the account that makes them, so the repo owner (RAkupper) creates it:
+**Settings → Developer settings → Fine-grained tokens → Generate new token**, resource
+owner RAkupper, **Only select repositories** → `Assignment_for_6700`, permission
+**Contents: Read and write**, expiry after the semester. On TEAM02, put it in its own
+file, which git and Docker builds ignore like `.env`:
+
+```bash
+echo "BACKUP_GITHUB_TOKEN=<token>" > .env.backup && chmod 600 .env.backup
+```
+
+Only the `jobs` container reads `.env.backup`. The app, which faces the internet, never
+holds the token. Restoring and listing need no token.
+
+### Take one
+
+```bash
+scripts/backup.sh
+docker compose run --rm jobs python -m myapp.backup list
+```
+
+It creates a draft release, uploads the four files, and only then publishes it, so a
+failed upload never looks like a backup. A systemd timer also runs it every week;
+`Persistent=true` catches up after a shelve. Install it once, on the instance:
+
+`/etc/systemd/system/team02-backup.service`:
+
+```ini
+[Unit]
+Description=Back up the catalog and Qdrant to a GitHub data release
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+User=exouser
+ExecStart=/home/exouser/Assignment_for_6700/scripts/backup.sh
+```
+
+`/etc/systemd/system/team02-backup.timer`:
+
+```ini
+[Timer]
+OnCalendar=Sun *-*-* 06:00:00 UTC
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+```
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now team02-backup.timer
+systemctl list-timers team02-backup.timer   # next run
+journalctl -u team02-backup.service -n 20   # last run's output
+```
+
+### Restore
+
+```bash
+scripts/restore.sh                          # the newest backup
+scripts/restore.sh data-20261106T060000Z    # a specific one
+scripts/restore.sh latest --no-activate     # load it, leave the alias alone
+```
+
+Nothing is replaced until every check passes:
+
+- every file matches its sha256 in the manifest;
+- the catalog passes `PRAGMA integrity_check` and has the manifest's schema and row count;
+- the snapshot loads into a new `provisions_v<N>` with the manifest's point count.
+
+Only then is the current catalog saved to `/data/backups/`, the backup's catalog and
+files put in place, and the alias moved to the new collection. If any step fails, the
+new collection is dropped and the old catalog put back. Existing collections are never
+overwritten, so rolling back is one `activate` command.
+
+### Restore drill
+
+Practice on empty volumes without touching the live stack. `-p drill` is a separate
+Compose project with its own volumes:
+
+```bash
+docker compose -p drill up -d --wait qdrant
+docker compose -p drill run --rm jobs python -m myapp.backup restore latest
+docker compose -p drill run --rm jobs python -m myapp.vectordb.collection status
+docker compose -p drill down -v
+```
+
+The status should show the manifest's collection and point count as live. The same
+steps without `-p drill`, followed by `docker compose up -d`, rebuild the stack on a
+new instance or a laptop.
+
+Measured Nov 6 with that 43 MB backup: the restore onto empty volumes took 4 s and
+gave back all 3,882 points, the alias, the catalog and the raw files, and a search
+returned the same ranking as the original. Rebuilding the same data from eCFR took
+23 minutes: 170 s to fetch 64 snapshots, 12 s to parse, and 19.5 min to load on one CPU.
+
+
 ## HTTPS with Caddy (first time only)
 
 1. Find the instance's DNS name. Jetstream2 names each instance
@@ -322,6 +444,7 @@ Without a key, `/admin/generate` answers 404 when `APP_ADMIN_API_KEY` is unset a
 | Stop the stack (keeps the model volume) | `docker compose down` |
 | Disk usage | `docker system df`, `df -h /` and `df -h /media/volume/team02-data` |
 | Qdrant collections and point counts | `docker compose run --rm jobs python -m myapp.vectordb.collection status` |
+| Back up now, list backups | `scripts/backup.sh`, `docker compose run --rm jobs python -m myapp.backup list` |
 
 Shelve TEAM02 in Exosphere when you are done, and say so in the group chat first so
 you don't cut off someone who is testing. Both containers use
@@ -357,6 +480,8 @@ LLM_MODEL=Qwen/Qwen2.5-14B-Instruct-AWQ
 | `https://<name>` doesn't load, `caddy` logs certificate errors | Port 80 or 443 is closed in the security group, or `APP_DOMAIN` doesn't resolve to the current public IP (it can change on unshelve). |
 | Everyone gets 429 at once | `FORWARDED_ALLOW_IPS` isn't `*`, so the app sees every request as coming from Caddy. |
 | `app` never starts, `qdrant` is unhealthy | `docker compose logs qdrant`. Usually `team02-data` is not mounted, so Docker's storage is missing; see the unshelve row above. |
+| `scripts/backup.sh` says GitHub answered 401 or 403 | `BACKUP_GITHUB_TOKEN` in `.env.backup` is missing, expired, or lacks Contents write on this repo. Make a new one as in [Token](#token-once). |
+| `restore` says a file does not match the manifest | The download is damaged or the release was edited. Nothing was changed; try the previous backup with `scripts/restore.sh <older tag>`. |
 | `PermissionError` under `/data` or `/embed-cache` | The volume was filled by a root container, for example a manual copy. Fix it once: `docker compose run --rm --user 0 jobs chown -R 10001:10001 /data /embed-cache`. |
 
 ## Measured on TEAM02
