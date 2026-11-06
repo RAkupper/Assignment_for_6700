@@ -208,8 +208,10 @@ What the loader is expected to do:
   chunks; a chunk never mixes two provisions, so every answer cites one exact paragraph.
 
 Deployment: a `qdrant` service in `compose.yml` (#37). Its storage, `/data`, and the
-embedding cache are bind mounts under `DATA_VOLUME_DIR`, the 20 GB Jetstream2 volume,
-not named volumes: those live on TEAM02's root disk, which has ~3.7 GB free.
+embedding cache are named Docker volumes (#52). They started as bind mounts under
+`DATA_VOLUME_DIR` because named volumes lived on TEAM02's small root disk; since #40
+Docker's own storage is on the 40 GB volume, so named volumes are there too and the
+stack no longer depends on a host path.
 
 ## Manually captured sources
 

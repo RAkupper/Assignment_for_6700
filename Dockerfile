@@ -25,8 +25,10 @@ ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
 
-# Create a non-root user
-RUN useradd --create-home --uid 10001 appuser
+# Create a non-root user and the folders it writes; new volumes copy this owner
+RUN useradd --create-home --uid 10001 appuser \
+    && mkdir -p /data /embed-cache \
+    && chown appuser:appuser /data /embed-cache
 
 # Copy the installed application and dependencies
 COPY --from=builder /app/.venv /app/.venv

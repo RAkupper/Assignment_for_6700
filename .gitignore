@@ -44,7 +44,7 @@ coverage.xml
 # Scratch
 _to_delete/
 
-# Compose bind mounts on a laptop (DATA_VOLUME_DIR default)
+# Old Compose bind mounts from before #52 (now named volumes)
 volume/
 
 # Local config files
