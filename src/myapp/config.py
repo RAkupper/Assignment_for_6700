@@ -10,6 +10,7 @@ from pydantic import (
     HttpUrl,
     SecretStr,
     StringConstraints,
+    field_validator,
     model_validator,
 )
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -57,11 +58,26 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         str_strip_whitespace=True,
         extra="ignore",
+        hide_input_in_errors=True,  # a rejected key must not land in the logs
     )
     name: str = Field(default="assignment-for-6700", min_length=1)
     environment: Literal["development", "production"] = "development"
     debug: bool = False
     llm: ModelSettings = Field(default_factory=ModelSettings)
+    admin_api_key: SecretStr | None = None  # unset turns /admin off (404)
+    rate_limit_ask_per_minute: int = Field(default=10, ge=1)  # per client address
+    rate_limit_retrieve_per_minute: int = Field(default=30, ge=1)
+
+    @field_validator("admin_api_key", mode="before")
+    @classmethod
+    def check_admin_key(cls, value: object) -> object:
+        """Treat a blank APP_ADMIN_API_KEY as unset and refuse a guessable one"""
+        if isinstance(value, str):
+            if not value.strip():
+                return None
+            if len(value.strip()) < 32:  # secrets.token_urlsafe(32) gives 43
+                raise ValueError("APP_ADMIN_API_KEY must be at least 32 characters")
+        return value
 
     @model_validator(mode="after")
     def reject_debug_in_production(self) -> Self:
