@@ -39,8 +39,10 @@ class ModelSettings(BaseSettings):
     base_url: HttpUrl = HttpUrl("http://localhost:11434/v1")
     model: str = Field(default="qwen2.5:1.5b-instruct", min_length=1)
     api_key: SecretStr | None = None
-    timeout_s: float = Field(default=120.0, gt=0)
+    timeout_s: float = Field(default=120.0, gt=0)  # the whole call, retries included
     connect_timeout_s: float = Field(default=5.0, gt=0)
+    max_retries: int = Field(default=3, ge=0, le=5)  # covers a ~3 s llm restart
+    retry_max_wait_s: float = Field(default=10.0, gt=0)  # longer Retry-After: give up
     max_tokens: int = Field(default=512, gt=0)
     temperature: float = Field(default=0.0, ge=0.0, le=2.0)
 

@@ -107,6 +107,10 @@ def test_generate_maps_model_errors(
 
     assert response.status_code == status_code
     assert response.json() == {"detail": str(error)}
+    if status_code == 503:  # usually a restart or a full queue
+        assert response.headers["Retry-After"] == "30"
+    else:
+        assert "Retry-After" not in response.headers
 
 
 @pytest.mark.anyio

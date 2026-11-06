@@ -1,6 +1,7 @@
 """Retrieve with the team's Searcher, build a prompt, then call the existing LLM."""
 
 import json
+import logging
 from datetime import UTC, datetime
 from threading import BoundedSemaphore, Lock
 
@@ -10,7 +11,7 @@ from qdrant_client import models
 from qdrant_client.http.exceptions import ResponseHandlingException, UnexpectedResponse
 
 from myapp.generation.schemas import Answer, QuestionRequest
-from myapp.model_client import ModelClient, ModelUnavailableError
+from myapp.model_client import ModelClient, ModelClientError, ModelUnavailableError
 from myapp.vectordb.collection import DENSE, SPARSE, current_target
 from myapp.vectordb.search import Hit, Searcher
 
@@ -33,6 +34,14 @@ NOT_COVERED = (
     "Ask your school's Designated School Official (DSO), or for J-1 your "
     "program's Responsible Officer."
 )
+
+
+MODEL_UNAVAILABLE = (
+    "The answer model is not available right now, so there is no written answer. "
+    "These are the passages that matched your question. Try again in a minute."
+)
+
+log = logging.getLogger(__name__)
 
 
 class GenerationBusyError(ModelUnavailableError):
@@ -134,14 +143,20 @@ class GenerationService:
             return Answer(
                 answer=NOT_COVERED, sources=[], status="insufficient_evidence"
             )
-        if not self._slots.acquire(timeout=self.settings.queue_timeout_s):
-            raise GenerationBusyError(
-                "All answer slots are busy; try again in a minute"
-            )
         try:
-            return self._generate(request, hits, model)
-        finally:
-            self._slots.release()
+            if not self._slots.acquire(timeout=self.settings.queue_timeout_s):
+                raise GenerationBusyError(
+                    "All answer slots are busy; try again in a minute"
+                )
+            try:
+                return self._generate(request, hits, model)
+            finally:
+                self._slots.release()
+        except ModelClientError as exc:  # retrieval worked, so the user still gets it
+            log.warning("answering with evidence only: %s", exc)
+            return Answer(
+                answer=MODEL_UNAVAILABLE, sources=hits, status="model_unavailable"
+            )
 
     def _generate(
         self, request: QuestionRequest, hits: list[Hit], model: ModelClient

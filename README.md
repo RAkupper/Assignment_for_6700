@@ -582,7 +582,9 @@ anywhere.
 | `LLM_BASE_URL` | `http://localhost:11434/v1` | Server root including `/v1`; must be a valid URL. |
 | `LLM_MODEL` | `qwen2.5:1.5b-instruct` | Model name as the server knows it. |
 | `LLM_API_KEY` | unset | Bearer token for hosted APIs; kept secret in logs and reprs. |
-| `LLM_TIMEOUT_S` / `LLM_CONNECT_TIMEOUT_S` | `120` / `5` | Seconds; must be positive. |
+| `LLM_TIMEOUT_S` / `LLM_CONNECT_TIMEOUT_S` | `120` / `5` | Seconds; must be positive. `LLM_TIMEOUT_S` bounds a whole call, retries included. |
+| `LLM_MAX_RETRIES` | `3` | Retries when nothing was generated: connection refused or never opened, or 429/502/503. Exponential backoff with full jitter. 0 to 5. |
+| `LLM_RETRY_MAX_WAIT_S` | `10` | Longest wait between tries; a longer `Retry-After` means give up at once. |
 | `LLM_MAX_TOKENS` | `512` | Must be positive. |
 | `LLM_TEMPERATURE` | `0.0` | Between 0 and 2. |
 | `LLM_DEVICE` | `cpu` | `cpu`, `cuda` or `auto`; read by the model server. |
@@ -592,8 +594,10 @@ Those are the code defaults. Under Compose they're set for the llama.cpp contain
 (`LLM_PROVIDER=openai`, `LLM_BASE_URL=http://llm:8080/v1`,
 `LLM_MODEL=qwen2.5-1.5b-instruct`, `LLM_MAX_TOKENS=256`).
 
-Model failures reach clients as `504` (timeout), `503` (server unreachable or
-erroring) or `502` (malformed reply). See
+Model failures reach `/admin/generate` callers as `504` (timeout), `503` (server
+unreachable or erroring, with `Retry-After: 30`) or `502` (malformed reply). `/ask`
+does not fail when only the model does: it returns the retrieved passages with
+`status: "model_unavailable"`. See
 [docs/model-serving.md](docs/model-serving.md) for where the model runs and why.
 
 ### Vector database settings
@@ -690,10 +694,13 @@ See the [RAG guide](docs/rag-quickstart.md) for configuration and examples.
 
 Open `http://localhost:8000/` for the prototype UI. It uses the same API origin,
 displays readiness/errors, and opens source excerpts when a citation is selected.
-`/ask` also returns `status`: `answered` or `insufficient_evidence`. An
-insufficient-evidence answer says the indexed rules do not cover the question and
-points to the school's DSO (or the J-1 Responsible Officer), without calling the
-model. Each eCFR source has a `url` to its paragraph on ecfr.gov, dated to `as_of`
+`/ask` also returns `status`: `answered`, `insufficient_evidence` or
+`model_unavailable`. An insufficient-evidence answer says the indexed rules do not
+cover the question and points to the school's DSO (or the J-1 Responsible Officer),
+without calling the model. When the model is down, times out, or every answer slot
+stays busy for `GENERATION_QUEUE_TIMEOUT_S`, the answer says so and `sources` holds
+the retrieved passages, so the user still sees the evidence. Only a retrieval
+failure is an error (503 with `Retry-After`). Each eCFR source has a `url` to its paragraph on ecfr.gov, dated to `as_of`
 when the question is historical.
 The prompt encourages inline citations, but the prototype does not enforce them
 or retry answers missing them. Retrieved evidence remains visible beside the

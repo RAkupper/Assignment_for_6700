@@ -1,5 +1,6 @@
 """A polite HTTP client for federal sites: rate limited, retried, identified."""
 
+import random
 import time
 from collections.abc import Callable
 from urllib.parse import urlsplit
@@ -24,11 +25,13 @@ class PoliteClient:
         transport: httpx2.BaseTransport | None = None,
         sleep: Callable[[float], None] = time.sleep,
         clock: Callable[[], float] = time.monotonic,
+        jitter: Callable[[float, float], float] = random.uniform,
     ) -> None:
         self.interval = settings.min_request_interval_s
         self.retries = settings.max_retries
         self._sleep = sleep
         self._clock = clock
+        self._jitter = jitter
         self._last: dict[str, float] = {}
         self._http = httpx2.Client(
             headers={"User-Agent": settings.user_agent, "Accept-Encoding": "gzip"},
@@ -53,12 +56,16 @@ class PoliteClient:
             except httpx2.TransportError:
                 if attempt == self.retries:
                     raise
-                self._sleep(2.0**attempt)
+                self._sleep(self._backoff(attempt))
                 continue
             if response.status_code not in RETRYABLE or attempt == self.retries:
                 return response
-            self._sleep(_retry_after(response) or 2.0**attempt)
+            self._sleep(_retry_after(response) or self._backoff(attempt))
         raise AssertionError("unreachable")  # the loop always returns or raises
+
+    def _backoff(self, attempt: int) -> float:
+        half = 2.0**attempt / 2  # equal jitter: never under half, so still polite
+        return half + self._jitter(0.0, half)
 
     def close(self) -> None:
         self._http.close()

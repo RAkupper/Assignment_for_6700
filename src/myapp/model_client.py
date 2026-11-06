@@ -1,5 +1,9 @@
 """Model client interface shared by the service and its tests."""
 
+import logging
+import random
+import time
+from collections.abc import Callable
 from typing import Any, Protocol, runtime_checkable
 
 import httpx2
@@ -22,6 +26,11 @@ class ModelClient(Protocol):
     def close(self) -> None:
         """Release connections or other resources held by the client."""
         ...
+
+
+log = logging.getLogger(__name__)
+
+RETRYABLE = {429, 502, 503}  # rejected before generating: llama.cpp loading or full
 
 
 class ModelClientError(RuntimeError):
@@ -63,8 +72,14 @@ class OpenAICompatibleClient:
         self,
         settings: ModelSettings,
         transport: httpx2.BaseTransport | None = None,
+        sleep: Callable[[float], None] = time.sleep,
+        clock: Callable[[], float] = time.monotonic,
+        jitter: Callable[[float, float], float] = random.uniform,
     ) -> None:
         self.settings = settings
+        self._sleep = sleep
+        self._clock = clock
+        self._jitter = jitter
         headers = {"Content-Type": "application/json"}
         if settings.api_key is not None:
             headers["Authorization"] = f"Bearer {settings.api_key.get_secret_value()}"
@@ -80,8 +95,15 @@ class OpenAICompatibleClient:
     def generate(self, prompt: str) -> str:
         """Send one user message and return the model's reply text.
 
+        This is the one place model calls are retried. A connection that was refused
+        or never opened, or a 429/502/503, means nothing was generated, so it is
+        retried up to ``LLM_MAX_RETRIES`` times with exponential backoff and full
+        jitter, honoring ``Retry-After``. A read timeout is not retried: the model may
+        still be working, and a second request would double the load.
+        ``LLM_TIMEOUT_S`` bounds the whole call, retries included.
+
         Raises:
-            ModelTimeoutError: the server did not answer within ``LLM_TIMEOUT_S``.
+            ModelTimeoutError: no answer within ``LLM_TIMEOUT_S``.
             ModelUnavailableError: the server was unreachable or returned an error.
             ModelClientError: the response did not have the expected shape.
         """
@@ -92,22 +114,63 @@ class OpenAICompatibleClient:
             "temperature": self.settings.temperature,
             "stream": False,
         }
-        try:
-            response = self._http.post("chat/completions", json=payload)
-            response.raise_for_status()
-        except httpx2.TimeoutException as exc:
-            raise ModelTimeoutError(
-                f"model server timed out after {self.settings.timeout_s}s"
-            ) from exc
-        except httpx2.HTTPStatusError as exc:
-            raise ModelUnavailableError(
-                f"model server returned HTTP {exc.response.status_code}"
-            ) from exc
-        except httpx2.RequestError as exc:
-            raise ModelUnavailableError(
-                f"could not reach model server at {self.settings.base_url}"
-            ) from exc
+        deadline = self._clock() + self.settings.timeout_s
+        for attempt in range(self.settings.max_retries + 1):
+            remaining = deadline - self._clock()
+            timeout = httpx2.Timeout(
+                remaining, connect=min(self.settings.connect_timeout_s, remaining)
+            )
+            response: httpx2.Response | None = None
+            try:
+                response = self._http.post(
+                    "chat/completions", json=payload, timeout=timeout
+                )
+            except (httpx2.ConnectError, httpx2.ConnectTimeout) as exc:  # nothing sent
+                failure: ModelClientError = ModelUnavailableError(
+                    f"could not reach model server at {self.settings.base_url}"
+                )
+                cause: Exception | None = exc
+            except httpx2.TimeoutException as exc:
+                raise ModelTimeoutError(
+                    f"model server timed out after {self.settings.timeout_s}s"
+                ) from exc
+            except httpx2.RequestError as exc:
+                raise ModelUnavailableError(
+                    f"could not reach model server at {self.settings.base_url}"
+                ) from exc
+            else:
+                if not response.is_error:
+                    return self._content(response)
+                failure = ModelUnavailableError(
+                    f"model server returned HTTP {response.status_code}"
+                )
+                cause = None  # an HTTP status, not an exception
+                if response.status_code not in RETRYABLE:
+                    raise failure
+            wait = self._backoff(attempt, response, deadline)
+            if wait is None:
+                raise failure from cause
+            log.warning("%s; retry %d in %.1fs", failure, attempt + 1, wait)
+            self._sleep(wait)
+        raise AssertionError("unreachable")  # the last attempt returns or raises
 
+    def _backoff(
+        self, attempt: int, response: httpx2.Response | None, deadline: float
+    ) -> float | None:
+        """Seconds to wait before the next try, or None to give up now."""
+        if attempt >= self.settings.max_retries:
+            return None
+        cap = self.settings.retry_max_wait_s
+        asked = response.headers.get("Retry-After", "") if response else ""
+        if asked.isdigit():
+            wait = float(asked)  # the server said when; over the cap means give up
+        else:
+            wait = self._jitter(0.0, min(cap, 2.0**attempt))  # full jitter
+        if wait > cap or self._clock() + wait + 1.0 >= deadline:
+            return None  # no time left for a useful try
+        return wait
+
+    def _content(self, response: httpx2.Response) -> str:
         try:
             content = response.json()["choices"][0]["message"]["content"]
         except (ValueError, KeyError, IndexError, TypeError) as exc:
