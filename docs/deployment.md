@@ -63,8 +63,8 @@ returns 503 until a compatible, nonempty retrieval index is loaded and activated
 ## Data volume (first time only)
 
 The root disk is 20 GB and Docker filled most of it. Everything large goes on the
-40 GB volume `team02-data`: Docker's images and volumes, ingestion data, Qdrant
-storage and the embedding models. Done on TEAM02 on Oct 28; repeat only for a new
+40 GB volume `team02-data`: Docker's images and volumes, which include the ingestion
+data, Qdrant storage and the embedding models. Done on TEAM02 on Oct 28; repeat only for a new
 instance or volume.
 
 TEAM02 uses Docker's containerd image store, so images live in `/var/lib/containerd`
@@ -114,15 +114,12 @@ because it mounts after boot, too late for Docker to wait on, and with
    docker images && docker volume ls   # images and llm-models still there
    ```
 
-4. Make the app's folders and point Compose at the volume. The app runs as UID
-   10001, so it owns the two it writes to:
+4. Start the stack. Compose creates its named volumes inside `/var/lib/docker`, which
+   is now on the volume:
 
    ```bash
-   sudo mkdir -p $V/data $V/embed-cache $V/qdrant $V/qdrant-snapshots
-   sudo chown -R 10001:10001 $V/data $V/embed-cache
-   echo "DATA_VOLUME_DIR=$V" >> .env
-   docker compose config | grep -c "$V"   # nonzero, or .env is not being read
    docker compose up -d
+   docker volume ls   # llm-models plus <project>_catalog-data, _qdrant-storage, ...
    ```
 
 5. Reboot test, then free the root disk:
@@ -137,20 +134,70 @@ because it mounts after boot, too late for Docker to wait on, and with
    ```
 
 Docker and containerd will not start unless the volume is mounted, so a missing
-volume stops the stack instead of filling the root disk. Without `DATA_VOLUME_DIR`,
-Compose uses `./volume` in the clone. That is fine on a laptop but puts data on the
-root disk on TEAM02.
+volume stops the stack instead of filling the root disk.
 
-| On the volume | Mounted at | Used by |
+| On the volume | Mounted at | Holds |
 | --- | --- | --- |
 | `containerd/` | `/var/lib/containerd` | image layers (~3.6 GB) |
-| `docker/` | `/var/lib/docker` | containers, `llm-models` (~1.1 GB) |
-| `data/` | `/data` | jobs: raw downloads, manual captures, `catalog.sqlite` |
-| `embed-cache/` | `/embed-cache` | app and jobs: BGE and BM25 models (~70 MB) |
-| `qdrant/` | `/qdrant/storage` | qdrant |
-| `qdrant-snapshots/` | `/qdrant/snapshots` | qdrant snapshots |
+| `docker/` | `/var/lib/docker` | containers and every named volume below |
+
+| Named volume | Mounted at | Used by |
+| --- | --- | --- |
+| `llm-models` | `/models` | llm: model weights (~1.1 GB) |
+| `catalog-data` | `/data` | jobs: raw downloads, manual captures, `catalog.sqlite` (17 MB on Nov 5) |
+| `embed-cache` | `/embed-cache` | app and jobs: BGE and BM25 models (65 MB) |
+| `qdrant-storage` | `/qdrant/storage` | qdrant (50 MB) |
+| `qdrant-snapshots` | `/qdrant/snapshots` | qdrant snapshots |
+
+Compose prefixes all but `llm-models` with the project name, the clone's folder name
+(`assignment_for_6700_catalog-data`). The image creates `/data` and `/embed-cache`
+owned by the app user (UID 10001), so new volumes need no `chown`.
 
 Measured Oct 28: root disk went from 2.8 GB to 7.5 GB free; the volume holds 4.3 GB.
+
+## Move the data into Docker volumes (once, #52)
+
+Until #52, Compose bind-mounted `$DATA_VOLUME_DIR/{data,embed-cache,qdrant,qdrant-snapshots}`.
+On an instance that still has those folders, move their contents into the named
+volumes after pulling #52, while the old containers are still running:
+
+```bash
+cd ~/Assignment_for_6700
+git pull
+scripts/migrate_to_volumes.sh /media/volume/team02-data
+```
+
+The script records the alias, collections, point counts and catalog integrity from the
+running stack, stops app and qdrant, copies each folder into its volume, starts
+everything, and checks the same things again. It prints `migrated` when they match and
+exits with an error otherwise. It never changes the old folders, so a failed run can
+simply be repeated.
+
+Once it passes, remove `DATA_VOLUME_DIR` from `.env`; Compose no longer reads it.
+Keep the old folders until a backup has been restored successfully (#52), then
+delete them:
+
+```bash
+sudo rm -rf /media/volume/team02-data/{data,embed-cache,qdrant,qdrant-snapshots}
+```
+
+## Look at or copy the data
+
+The volumes are only reachable through containers. A few commands, from the clone:
+
+```bash
+docker compose run --rm jobs ls -la /data                            # what is there
+docker compose run --rm jobs python -m myapp.vectordb.collection status
+docker run --rm -v assignment_for_6700_catalog-data:/data:ro busybox du -sh /data
+```
+
+To use an existing catalog instead of fetching, copy it into the volume and migrate:
+
+```bash
+docker compose run --rm -T -v "$PWD/catalog.sqlite:/import.sqlite:ro" jobs \
+  python -c "import sqlite3; sqlite3.connect('/import.sqlite').backup(sqlite3.connect('/data/catalog.sqlite'))"
+docker compose run --rm jobs python -m myapp.ingest.catalog migrate
+```
 
 ## Resource limits
 
@@ -303,8 +350,8 @@ LLM_MODEL=Qwen/Qwen2.5-14B-Instruct-AWQ
 | Docker does not start after an unshelve | The volume is not attached or not mounted, so the `RequiresMountsFor` rules hold Docker and containerd back. Check **Volumes** in Exosphere, then `sudo mount -a && sudo systemctl start containerd docker`. If the volume was reattached under a new device name (`lsblk`), mask `automount-volume@<name>.service` too. |
 | `https://<name>` doesn't load, `caddy` logs certificate errors | Port 80 or 443 is closed in the security group, or `APP_DOMAIN` doesn't resolve to the current public IP (it can change on unshelve). |
 | Everyone gets 429 at once | `FORWARDED_ALLOW_IPS` isn't `*`, so the app sees every request as coming from Caddy. |
-| `app` never starts, `qdrant` is unhealthy | `docker compose logs qdrant`. Usually the volume is not mounted or `DATA_VOLUME_DIR` in `.env` is wrong. |
-| `PermissionError` under `/data` or `/embed-cache` | The folders on the volume belong to root. Run the `chown` from [Data volume](#data-volume-first-time-only). |
+| `app` never starts, `qdrant` is unhealthy | `docker compose logs qdrant`. Usually `team02-data` is not mounted, so Docker's storage is missing; see the unshelve row above. |
+| `PermissionError` under `/data` or `/embed-cache` | The volume was filled by a root container, for example a manual copy. Fix it once: `docker compose run --rm --user 0 jobs chown -R 10001:10001 /data /embed-cache`. |
 
 ## Measured on TEAM02
 

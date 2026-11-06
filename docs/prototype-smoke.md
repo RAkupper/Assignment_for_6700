@@ -31,5 +31,5 @@ topic separation and citations, but citations are not enforced. Answers and
 attribution still require review; this prototype does not claim production accuracy.
 
 The UI is served by the existing app container at `/`. No frontend container or
-Node.js runtime is required. Local runtime data under `volume/` and `.env` are
+Node.js runtime is required. Runtime data lives in named Docker volumes and `.env` is
 gitignored. Jetstream2 deployment has not been verified by this local smoke test.

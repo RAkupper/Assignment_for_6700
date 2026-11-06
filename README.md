@@ -701,7 +701,7 @@ answer. The UI links valid `[N]` labels to evidence cards and indicates when
 inline references are absent. Answers and attribution require manual review.
 
 Run `python scripts/smoke_rag.py` against the running Docker stack for a focused
-live test. Runtime data under `volume/` and private `.env` files are gitignored;
+live test. Runtime data lives in named Docker volumes and private `.env` files are gitignored;
 committing application code does not include these files.
 
 | Model | Field | Type | Validation or example |
