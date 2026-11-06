@@ -745,6 +745,7 @@ Assignment_for_6700/
 │   ├── healthcheck.py         # health check the container runs
 │   ├── model_client.py        # ModelClient protocol, echo and OpenAI-compatible clients
 │   ├── ratelimit.py           # per-client sliding-window limits for /ask and /retrieve
+│   ├── backup.py              # backups as GitHub data releases; verified restore
 │   ├── main.py                # CLI entry-point placeholder
 │   ├── ingest/                # source protocol and validated ingestion records
 │   ├── generation/
@@ -762,6 +763,9 @@ Assignment_for_6700/
 ├── measurements/              # before/after results of the blocking-call audit
 ├── outputs/docker/            # raw Docker build logs and timings
 ├── scripts/bench_model.py     # latency benchmark through the service's client
+├── scripts/backup.sh          # back up the catalog and Qdrant to a data release
+├── scripts/restore.sh         # restore a data release after checking it
+├── scripts/migrate_to_volumes.sh  # one-time move from bind mounts to volumes
 └── tests/
     ├── conftest.py, fakes.py  # FakeModelClient and its fast and slow fixtures
     ├── test_config.py         # Settings validation tests
@@ -770,6 +774,7 @@ Assignment_for_6700/
     ├── test_healthcheck.py    # container health check exit codes
     ├── test_model_client.py   # client lifecycle and dependency override
     ├── test_openai_client.py  # model settings, HTTP client, error mapping
+    ├── test_backup.py         # backup contents, checks, restore and rollback, releases API
     ├── test_ratelimit.py      # 429 with Retry-After, per-client limits, no-store
     ├── test_ready.py          # /ready endpoint and the client ping
     ├── generation/            # API + actual loader/searcher integration, fake inference
