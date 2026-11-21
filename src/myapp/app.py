@@ -1,13 +1,15 @@
 """FastAPI application: service instance, response models and routes."""
 
 import asyncio
-from collections.abc import AsyncIterator
+import secrets
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated, Literal
 
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request, Response
 from fastapi.responses import FileResponse, JSONResponse
+from fastapi.security import APIKeyHeader
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -22,6 +24,7 @@ from myapp.model_client import (
     ModelUnavailableError,
     build_model_client,
 )
+from myapp.ratelimit import SlidingWindowLimiter
 from myapp.vectordb.search import Hit
 
 settings = Settings()
@@ -53,6 +56,19 @@ app = FastAPI(
 )
 web_dir = Path(__file__).with_name("web")
 app.mount("/assets", StaticFiles(directory=web_dir), name="assets")
+
+PRIVATE_PATHS = {"/ask", "/retrieve"}  # questions can describe a user's visa status
+
+
+@app.middleware("http")
+async def no_store_private(
+    request: Request, call_next: Callable[[Request], Awaitable[Response]]
+) -> Response:
+    """Keep questions and answers out of browser and proxy caches, errors included."""
+    response = await call_next(request)
+    if request.url.path in PRIVATE_PATHS:
+        response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 @app.get("/", include_in_schema=False)
@@ -166,7 +182,40 @@ def get_generation_service(request: Request) -> GenerationService:
     return service
 
 
-@app.post("/retrieve", response_model=list[Hit])
+asks = SlidingWindowLimiter()
+retrievals = SlidingWindowLimiter()
+
+
+def _enforce(limiter: SlidingWindowLimiter, request: Request, per_minute: int) -> None:
+    """Answer 429 with Retry-After once a client goes over its limit.
+
+    Behind Caddy, uvicorn sets ``request.client`` from X-Forwarded-For, so each
+    user gets a limit rather than everyone sharing Caddy's address.
+    """
+    client = request.client.host if request.client else "unknown"
+    wait = limiter.check(client, per_minute)
+    if wait:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Too many requests: at most {per_minute} a minute",
+            headers={"Retry-After": str(wait)},
+        )
+
+
+def limit_asks(request: Request) -> None:
+    _enforce(asks, request, settings.rate_limit_ask_per_minute)
+
+
+def limit_retrievals(request: Request) -> None:
+    _enforce(retrievals, request, settings.rate_limit_retrieve_per_minute)
+
+
+@app.post(
+    "/retrieve",
+    response_model=list[Hit],
+    dependencies=[Depends(limit_retrievals)],
+    responses={429: {"model": ErrorResponse}},
+)
 def retrieve(
     body: QuestionRequest,
     generation: Annotated[GenerationService, Depends(get_generation_service)],
@@ -175,7 +224,12 @@ def retrieve(
     return generation.retrieve(body)
 
 
-@app.post("/ask", response_model=Answer)
+@app.post(
+    "/ask",
+    response_model=Answer,
+    dependencies=[Depends(limit_asks)],
+    responses={429: {"model": ErrorResponse}},
+)
 def ask(
     body: QuestionRequest,
     generation: Annotated[GenerationService, Depends(get_generation_service)],
@@ -185,7 +239,28 @@ def ask(
     return generation.ask(body, model)
 
 
-@app.post("/generate", response_model=GenerateResponse)
+admin_key = APIKeyHeader(name="X-Admin-Key", auto_error=False)
+
+
+def require_admin(key: Annotated[str | None, Depends(admin_key)]) -> None:
+    """Let a request through only with the key from APP_ADMIN_API_KEY.
+
+    404 when no key is configured, so the routes look absent; 401 for a missing
+    or wrong key. compare_digest takes the same time however much of it matches.
+    """
+    if settings.admin_api_key is None:
+        raise HTTPException(status_code=404, detail="Not Found")
+    expected = settings.admin_api_key.get_secret_value().encode()
+    if key is None or not secrets.compare_digest(key.encode(), expected):
+        raise HTTPException(
+            status_code=401, detail="A valid X-Admin-Key header is required"
+        )
+
+
+admin = APIRouter(prefix="/admin", dependencies=[Depends(require_admin)])
+
+
+@admin.post("/generate", response_model=GenerateResponse)
 async def generate(
     body: GenerateRequest,
     model: Annotated[ModelClient, Depends(get_model_client)],
@@ -194,10 +269,14 @@ async def generate(
 
     The client call is synchronous, so it runs in a worker thread and the event
     loop keeps answering other requests, such as ``/health``, while the model works.
-    Model failures become 504, 503 or 502 through ``model_error_handler``.
+    Model failures become 504, 503 or 502 through ``model_error_handler``. It sends
+    any prompt straight to the model server, so it sits behind ``require_admin``.
 
     Returns:
         GenerateResponse: the completion text.
     """
     completion = await asyncio.to_thread(model.generate, body.prompt)
     return GenerateResponse(completion=completion)
+
+
+app.include_router(admin)

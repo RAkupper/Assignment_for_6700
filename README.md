@@ -7,7 +7,8 @@ RAG prototype: `/ask` now connects the team's `vectordb` retrieval to the new
 An installable FastAPI service skeleton for our course ML inference API. This week it
 exposes a typed `/health` endpoint; later assignments will put a model behind it.
 
-HW2 added Qwen2.5-1.5B-Instruct in a llama.cpp container (`/generate`) and a
+HW2 added Qwen2.5-1.5B-Instruct in a llama.cpp container (`/generate`, now
+`/admin/generate` behind a key) and a
 scikit-learn digit classifier (`/predict`). `/predict` was removed in #44 once `/ask`
 replaced it; the HW2 blocking-call audit is still in [discussion.md](discussion.md)
 and the `blocking-before` and `blocking-after` tags. We deploy on Jetstream2 with
@@ -22,6 +23,7 @@ database with dense (BGE) and sparse (BM25) vectors and filterable metadata. See
 
 - [Quickstart](#quickstart) (tutorial: clean machine to running service)
 - [Deploy with Compose](#deploy-with-compose) (run everything on an instance)
+- [Security](#security) (HTTPS, open ports, admin key, rate limits, pinning)
 - [Docker](#docker) (build, run, and check the container)
 - [Vector database (Qdrant)](#vector-database-qdrant) (collection, loading, rollback)
 - [How-to guides](#how-to-guides) (tests, linting, pre-commit, adding dependencies)
@@ -125,7 +127,7 @@ docker compose up -d --build
 
 **If you already followed Quickstart:** reuse your existing checkout and stop its
 Uvicorn server first. The Quickstart `.env` overrides Compose's deployment defaults
-and selects `LLM_PROVIDER=echo`, so `/generate` would echo the prompt rather than
+and selects `LLM_PROVIDER=echo`, so `/admin/generate` would echo the prompt rather than
 call the model container. Before starting Compose, temporarily move that file aside
 (choose another backup name if this one already exists):
 
@@ -151,8 +153,9 @@ when the containers' health checks pass. `/health` remains a liveness check.
 
 ### 3. Test the endpoints
 
-On the instance use localhost. From your laptop use the instance IP instead (ours is
-`149.165.150.147`).
+On the instance use localhost. Port 8000 only listens on the instance itself
+(`APP_BIND=127.0.0.1`), so from your laptop use `https://<APP_DOMAIN>` once Caddy is
+on; see [Security](#security).
 
 ```bash
 HOST=http://localhost:8000
@@ -182,11 +185,12 @@ Should return:
 {"status":"ready"}
 ```
 
-`/generate`:
+`/admin/generate` (needs `APP_ADMIN_API_KEY` in `.env`; 404 without it):
 
 ```bash
-curl -X POST $HOST/generate \
+curl -X POST $HOST/admin/generate \
   -H "Content-Type: application/json" \
+  -H "X-Admin-Key: $APP_ADMIN_API_KEY" \
   -d '{"prompt": "In one sentence, what is OPT for F-1 students?"}'
 ```
 
@@ -236,6 +240,64 @@ LLM_MODEL=Qwen/Qwen2.5-14B-Instruct-AWQ
 
 Then run `docker compose up -d` again. See [docs/model-serving.md](docs/model-serving.md).
 
+## Security
+
+What reaches the app from the internet, and what checks a request passes on the way.
+
+**Open ports.** On TEAM02 only Caddy publishes ports to the internet (80 and 443).
+The app publishes 8000 on `APP_BIND`, which defaults to `127.0.0.1`, so only the
+instance itself reaches it. Qdrant and llm publish nothing; the app reaches them by
+service name on the Compose network. Check with `docker ps`: the `PORTS` column
+should show `127.0.0.1:8000->8000/tcp` for the app and `0.0.0.0` only for Caddy.
+
+**HTTPS.** Caddy (the `proxy` profile) gets and renews a certificate for
+`APP_DOMAIN` and redirects http to https, so questions, which can describe a user's
+visa status and plans, are encrypted on the way. Setup is in
+[docs/deployment.md](docs/deployment.md#https-with-caddy-first-time-only).
+
+| Variable (in `.env`) | Default | Meaning |
+| --- | --- | --- |
+| `COMPOSE_PROFILES` | unset | `proxy` starts Caddy. |
+| `APP_DOMAIN` | `localhost` | The name Caddy gets a certificate for, e.g. the instance's Jetstream2 name. |
+| `APP_BIND` | `127.0.0.1` | Address the app's port 8000 listens on. `0.0.0.0` opens it to the internet. |
+| `FORWARDED_ALLOW_IPS` | `127.0.0.1` | Addresses uvicorn trusts for `X-Forwarded-For`. Set `*` behind Caddy. |
+
+**Who sent the request.** `/admin/generate` passes any prompt to the model, so it
+needs `X-Admin-Key` matching `APP_ADMIN_API_KEY`, compared in constant time. With no
+key set the route answers 404. Every route added to the `admin` router gets the same
+check. Make a key on the instance and keep it only in `.env`:
+
+```bash
+python3 -c "import secrets; print(secrets.token_urlsafe(32))"
+```
+
+**Rate limits.** `/ask` holds a model slot for 20 to 45 s, so one client could keep
+both slots busy. Each client address gets 10 `/ask` and 30 `/retrieve` requests per
+minute, then 429 with `Retry-After`. Behind Caddy every request comes from Caddy's
+address, so uvicorn reads the real one from `X-Forwarded-For`
+(`FORWARDED_ALLOW_IPS=*`). Caddy overwrites any copy a client sends, and that's only
+safe because `APP_BIND=127.0.0.1` leaves no way around Caddy. The counts live in
+memory and reset on restart. A flood from many machines has to be stopped in front of
+Jetstream2; this doesn't handle it.
+
+**What we keep.** Nothing per user: no accounts, no stored questions or answers.
+uvicorn's access log records the client address, path and status of each request,
+not its body. `/ask` and `/retrieve` send `Cache-Control: no-store` so browsers and
+proxies don't keep a copy.
+
+**Untrusted input.** Questions are limited to 1,000 characters. The prompt tells the
+model the question and evidence are data, not instructions, but that doesn't stop
+prompt injection on its own. What limits the damage is that the model has no private
+data to leak and no way to send anything out: it has no tools, and the page shows
+its answer as text, with source links built by the server rather than by the model.
+
+**Dependencies.** Python packages are pinned with hashes in `uv.lock`; GitHub
+Actions and pre-commit hooks to commit SHAs; the Python, uv, llama.cpp, Qdrant and
+Caddy images to digests. Updating one is a pull request that changes the pin.
+gitleaks runs in pre-commit and in CI to keep keys out of the history. Not pinned
+yet: the model weights (`LLM_HF_REPO`) and the embedding models, which download by
+name.
+
 ## Docker
 
 Build the application image:
@@ -268,7 +330,7 @@ Expected response:
 See [Docker setup](docs/docker.md) for container health checks,
 cleanup commands, image size, and rebuild measurements.
 
-Note: this only starts the app. `/generate` and `/ready` need the model server too, so
+Note: this only starts the app. `/admin/generate` and `/ready` need the model server too, so
 use [Compose](#deploy-with-compose) for the full thing.
 
 ## Vector database (Qdrant)
@@ -506,6 +568,9 @@ sync.
 | `APP_NAME` | `assignment-for-6700` | Application title; must not be empty or whitespace-only. |
 | `APP_ENVIRONMENT` | `development` | Must be `development` or `production`. |
 | `APP_DEBUG` | `false` | Boolean debug flag; must be `false` in production. |
+| `APP_ADMIN_API_KEY` | unset | Key for `/admin` routes, sent as `X-Admin-Key`. Unset or blank turns them off (404). At least 32 characters; kept secret in logs and errors. |
+| `APP_RATE_LIMIT_ASK_PER_MINUTE` | `10` | `/ask` requests per client address per minute, then 429. At least 1. |
+| `APP_RATE_LIMIT_RETRIEVE_PER_MINUTE` | `30` | Same for `/retrieve`. |
 
 Model settings use the `LLM_` prefix and are read by `ModelSettings` in the same
 file. The defaults need no model server (`LLM_PROVIDER=echo`), so tests and CI run
@@ -580,7 +645,7 @@ LLM_PROVIDER=openai uv run python scripts/bench_model.py   # latency check
 | GET    | `/` | HTML | English prototype interface with clickable evidence citations |
 | GET    | `/health` | `HealthResponse` | Liveness check with service version     |
 | GET    | `/ready` | `ReadyResponse` | Configured model and enabled retrieval dependencies |
-| POST   | `/generate` | `GenerateResponse` | Model completion for a prompt |
+| POST   | `/admin/generate` | `GenerateResponse` | Model completion for a prompt; needs `X-Admin-Key` |
 | POST   | `/retrieve` | `list[Hit]` | Team hybrid retrieval; generation must be enabled |
 | POST   | `/ask` | `Answer` | Retrieved evidence → LLM answer with sources |
 | GET    | `/docs`   | HTML             | Auto-generated Swagger UI (FastAPI)      |
@@ -609,14 +674,18 @@ Readiness is a dependency probe, not a replacement for a real-model smoke test:
 curl http://127.0.0.1:8000/ready
 ```
 
-`POST /generate` takes a `GenerateRequest` body and returns a `GenerateResponse`.
-The model call runs in a worker thread, so `/health` keeps answering while a slow
-generation is in flight.
+`POST /admin/generate` takes a `GenerateRequest` body and returns a
+`GenerateResponse`. It sends any prompt straight to the model server, so it needs the
+`X-Admin-Key` header: 404 when `APP_ADMIN_API_KEY` is unset, 401 for a missing or
+wrong key. The model call runs in a worker thread, so `/health` keeps answering while
+a slow generation is in flight.
 
 `POST /ask` accepts `question` and optional `k`, `as_of`, `visa_type`, `sources`,
 and `include_proposed`. It returns `answer` and `sources`; citation `[1]` refers to
 the first source. `POST /retrieve` accepts the same request and returns passages
-without generating. Compose enables `GENERATION_ENABLED=true` by default.
+without generating. Compose enables `GENERATION_ENABLED=true` by default. Both
+answer 429 with `Retry-After` once a client goes over its limit, and both send
+`Cache-Control: no-store`.
 See the [RAG guide](docs/rag-quickstart.md) for configuration and examples.
 
 Open `http://localhost:8000/` for the prototype UI. It uses the same API origin,
@@ -641,8 +710,9 @@ committing application code does not include these files.
 | `GenerateResponse` | `completion` | `str` | `"OPT is a period of practical training..."` |
 
 ```bash
-curl -X POST http://127.0.0.1:8000/generate \
+curl -X POST http://127.0.0.1:8000/admin/generate \
   -H "Content-Type: application/json" \
+  -H "X-Admin-Key: $APP_ADMIN_API_KEY" \
   -d '{"prompt": "What is OPT?"}'
 ```
 
@@ -660,10 +730,11 @@ Assignment_for_6700/
 ├── .env.local.example         # local development settings
 ├── .env.production.example    # deployed settings
 ├── .dockerignore              # keeps env files, .venv and .git out of the image
-├── .pre-commit-config.yaml    # Git hooks (ruff, hygiene checks)
+├── .pre-commit-config.yaml    # Git hooks (ruff, hygiene checks, gitleaks)
 ├── .python-version            # Python 3.13, read by uv and CI
 ├── Dockerfile                 # app image: uv sync --frozen, non-root, HEALTHCHECK
 ├── compose.yml                # API/generation + model server + Qdrant + one-off jobs
+├── Caddyfile                  # HTTPS reverse proxy in front of the app (proxy profile)
 ├── discussion.md              # blocking-call audit: step table and measurements
 ├── pyproject.toml             # metadata, dependencies, tool config
 ├── uv.lock                    # pinned, shared environment
@@ -673,6 +744,7 @@ Assignment_for_6700/
 │   ├── config.py              # typed Settings and ModelSettings from the environment
 │   ├── healthcheck.py         # health check the container runs
 │   ├── model_client.py        # ModelClient protocol, echo and OpenAI-compatible clients
+│   ├── ratelimit.py           # per-client sliding-window limits for /ask and /retrieve
 │   ├── main.py                # CLI entry-point placeholder
 │   ├── ingest/                # source protocol and validated ingestion records
 │   ├── generation/
@@ -693,11 +765,12 @@ Assignment_for_6700/
 └── tests/
     ├── conftest.py, fakes.py  # FakeModelClient and its fast and slow fixtures
     ├── test_config.py         # Settings validation tests
-    ├── test_generate.py       # /generate endpoint, health during a slow request
+    ├── test_generate.py       # /admin/generate key check, health during a slow request
     ├── test_health.py         # /health endpoint tests
     ├── test_healthcheck.py    # container health check exit codes
     ├── test_model_client.py   # client lifecycle and dependency override
     ├── test_openai_client.py  # model settings, HTTP client, error mapping
+    ├── test_ratelimit.py      # 429 with Retry-After, per-client limits, no-store
     ├── test_ready.py          # /ready endpoint and the client ping
     ├── generation/            # API + actual loader/searcher integration, fake inference
     └── vectordb/
@@ -709,7 +782,10 @@ Assignment_for_6700/
 
 ### Continuous integration
 
-`.github/workflows/ci.yml` runs on every push and pull request, on `ubuntu-latest`:
+`.github/workflows/ci.yml` runs two jobs on every push and pull request, on
+`ubuntu-latest`. Each action is pinned to a commit SHA, with its version in a comment.
+
+`quality-gates`:
 
 1. Check out the repository
 2. Install Python (version from `.python-version`)
@@ -717,6 +793,9 @@ Assignment_for_6700/
 4. `uv run ruff check` and `uv run ruff format --check`
 5. `uv run mypy src/`
 6. `uv run pytest`
+
+`secret-scan` checks out the full history, installs gitleaks after checking its
+release hash, and runs `gitleaks git` over every commit.
 
 A failure at any step fails the run. See results under the repository's
 **Actions** tab.
@@ -760,5 +839,5 @@ A failure at any step fails the run. See results under the repository's
   `chflags nohidden .venv/lib/python3.13/site-packages/*.pth`. Lasting fix: keep the
   clone outside the synced folders, then `rm -rf .venv && uv sync --extra dev`.
 - **Port 8000 already in use**: add `--port 8001` to the run command.
-- **`/ready` or `/generate` gives 503**: the model server isn't ready yet. Check
+- **`/ready` or `/admin/generate` gives 503**: the model server isn't ready yet. Check
   `docker compose ps` (the first start has to download the model).

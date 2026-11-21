@@ -7,10 +7,12 @@ do when something breaks. The stack is defined in [`compose.yml`](../compose.yml
 
 ```text
 TEAM02 (Jetstream2 m3.small: 2 vCPUs, 6 GB RAM, 20 GB root disk + 40 GB volume)
-├── app   container, port 8000 (public)
+├── caddy container, ports 80 and 443 (public), with COMPOSE_PROFILES=proxy
+│     └── HTTPS for APP_DOMAIN, passes each request to app:8000
+├── app   container, port 8000 (instance only, APP_BIND=127.0.0.1)
 │     ├── GET  /health    the app process is up
 │     ├── GET  /ready     configured LLM and enabled retrieval dependencies are ready
-│     ├── POST /generate  asks the llm container over the compose network
+│     ├── POST /admin/generate  asks the llm container; needs X-Admin-Key
 │     ├── POST /retrieve  returns matching provisions from Qdrant
 │     └── POST /ask       retrieves evidence and generates a cited answer
 ├── llm   container, port 8080 (internal only)
@@ -23,7 +25,7 @@ TEAM02 (Jetstream2 m3.small: 2 vCPUs, 6 GB RAM, 20 GB root disk + 40 GB volume)
 ```
 
 - The LLM runs in its own container so the app image stays small and the model can
-  be swapped through env vars. `/generate` returns 503 and `/ready` returns 503
+  be swapped through env vars. `/admin/generate` and `/ready` return 503
   while it is unavailable; `/health` stays 200.
 - We use llama.cpp rather than Ollama because the Ollama image (3.78 GB) does not
   fit next to a model on the 20 GB disk. The llama.cpp image is 309 MB.
@@ -206,24 +208,56 @@ The loader builds a new collection
 and moves the `provisions` alias to it. To roll back, move the alias back:
 `docker compose run --rm jobs python -m myapp.vectordb.collection activate provisions_v1`.
 
+## HTTPS with Caddy (first time only)
+
+1. Find the instance's DNS name. Jetstream2 names each instance
+   `<instance>.<project>.projects.jetstream-cloud.org`; Exosphere shows it on the
+   instance page. Check it resolves to the current public IP:
+   `dig +short <name>`.
+2. Ports 80 and 443 must be open in the instance's security group (Exosphere,
+   instance page). Caddy needs 80 to get the certificate, even though it then
+   redirects to 443.
+3. On the instance, add to `.env`:
+
+   ```bash
+   COMPOSE_PROFILES=proxy
+   APP_DOMAIN=<name>
+   APP_BIND=127.0.0.1
+   FORWARDED_ALLOW_IPS=*
+   APP_ADMIN_API_KEY=<output of: python3 -c "import secrets; print(secrets.token_urlsafe(32))">
+   ```
+
+4. `docker compose up -d --build`, then `docker compose logs caddy` should show
+   `certificate obtained successfully` within a minute.
+
+`.env` is gitignored; keep the admin key there and nowhere else. The certificate is
+in the `caddy-data` volume and renews itself.
+
 ## Check it from your laptop
 
 ```bash
-curl http://<public-ip>:8000/health
-curl http://<public-ip>:8000/ready
-curl -X POST http://<public-ip>:8000/generate \
-  -H "Content-Type: application/json" \
-  -d '{"prompt": "What is OPT?"}'
-curl -X POST http://<public-ip>:8000/ask \
+HOST=https://<name>
+curl $HOST/health
+curl $HOST/ready
+curl -X POST $HOST/ask \
   -H "Content-Type: application/json" \
   -d '{"question": "What does Form I-983 relate to?", "visa_type": "F-1"}'
+curl -X POST $HOST/admin/generate \
+  -H "Content-Type: application/json" \
+  -H "X-Admin-Key: <key from .env>" \
+  -d '{"prompt": "What is OPT?"}'
 ```
 
-Qdrant must not answer from outside. This should time out or be refused:
+Plain http redirects, and nothing else answers from outside:
 
 ```bash
-curl -m 5 http://<public-ip>:6333/
+curl -I http://<name>              # 308 Permanent Redirect to https
+curl -m 5 http://<public-ip>:8000/  # refused or times out
+curl -m 5 http://<public-ip>:6333/  # refused or times out (Qdrant)
 ```
+
+Without a key, `/admin/generate` answers 404 when `APP_ADMIN_API_KEY` is unset and
+401 when it is set. The 11th `/ask` within a minute from one address answers 429.
 
 ## Everyday commands (on the instance, in `~/Assignment_for_6700`)
 
@@ -263,10 +297,12 @@ LLM_MODEL=Qwen/Qwen2.5-14B-Instruct-AWQ
 | --- | --- |
 | `ssh` times out | TEAM02 is shelved, or the IP changed after an unshelve. Check Exosphere. |
 | `ssh` says the host key changed | You are using an old IP that now belongs to another machine. Get the current IP from Exosphere. |
-| `/generate` or `/ready` returns 503 | The llm container is not ready. Check `docker compose ps` and `docker compose logs llm`. |
+| `/admin/generate` or `/ready` returns 503 | The llm container is not ready. Check `docker compose ps` and `docker compose logs llm`. |
 | `app` keeps restarting | Usually a config error at startup. `docker compose logs app` shows which setting failed validation, e.g. `LLM_PROVIDER=echo` in production. |
 | Build fails with "no space left on device" | Check `df -h /`; remove old images with `docker image prune`. Do not delete the `llm-models` volume unless you want to download the model again. |
 | Docker does not start after an unshelve | The volume is not attached or not mounted, so the `RequiresMountsFor` rules hold Docker and containerd back. Check **Volumes** in Exosphere, then `sudo mount -a && sudo systemctl start containerd docker`. If the volume was reattached under a new device name (`lsblk`), mask `automount-volume@<name>.service` too. |
+| `https://<name>` doesn't load, `caddy` logs certificate errors | Port 80 or 443 is closed in the security group, or `APP_DOMAIN` doesn't resolve to the current public IP (it can change on unshelve). |
+| Everyone gets 429 at once | `FORWARDED_ALLOW_IPS` isn't `*`, so the app sees every request as coming from Caddy. |
 | `app` never starts, `qdrant` is unhealthy | `docker compose logs qdrant`. Usually the volume is not mounted or `DATA_VOLUME_DIR` in `.env` is wrong. |
 | `PermissionError` under `/data` or `/embed-cache` | The folders on the volume belong to root. Run the `chown` from [Data volume](#data-volume-first-time-only). |
 
