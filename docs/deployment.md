@@ -34,15 +34,18 @@ TEAM02 (Jetstream2 m3.small: 2 vCPUs, 6 GB RAM, 20 GB root disk + 40 GB volume)
 
 1. In [Exosphere](https://jetstream2.exosphere.app), open TEAM02. If it is shelved,
    choose **Actions → Unshelve** and wait for **Ready**.
-2. Copy the **public IP** from the instance page. It can change on unshelve while
-   Jetstream2 is short of floating IPs (it moved to `149.165.153.173` on Oct 28),
-   so check it each time. SSH then says the host key is known under the old IP;
-   answer `yes`.
+2. Use the instance's hostname, `team02.cis240466.projects.jetstream-cloud.org`,
+   not its IP. The public IP can change on unshelve (it changed twice on Oct 28 and
+   twice on Nov 20, and one old IP went to another project's machine), but the
+   hostname's DNS record follows it, so nothing needs updating.
 3. From your laptop (your SSH key must be in the instance's `authorized_keys`):
 
    ```bash
-   ssh exouser@<public-ip>
+   ssh exouser@team02.cis240466.projects.jetstream-cloud.org
    ```
+
+   The first time, check that SSH shows the host key
+   `SHA256:P3MOMLulOLoEUUm1IJ8DnZTVCjap2jvZdEr9cztdOHA` before answering `yes`.
 
 4. On the instance, from a fresh clone:
 
@@ -179,6 +182,11 @@ the main branch's stack: 25 s, before and after identical, the app afterwards on
 `127.0.0.1:8000` only. The volumes came out the same size as the folders (Qdrant 25 MB,
 its files stay sparse).
 
+Run on TEAM02 itself on Nov 21: before and after identical (alias `provisions` ->
+`provisions_v2`, 3,882 points in both collections, catalog ok), with `/var/lib/docker`
+on the 40 GB volume. The evaluation set from #58 scored 19/25 before and after the
+move.
+
 Once it passes, remove `DATA_VOLUME_DIR` from `.env`; Compose no longer reads it.
 Keep the old folders until a backup has been restored successfully (#52), then
 delete them:
@@ -286,6 +294,15 @@ and moves the `provisions` alias to it. To roll back, move the alias back:
 
 `.env` is gitignored; keep the admin key there and nowhere else. The certificate is
 in the `caddy-data` volume and renews itself.
+
+On TEAM02 (Nov 21) the app is at https://team02.cis240466.projects.jetstream-cloud.org:
+
+- Exosphere's default security group already let 80 and 443 through: before Caddy
+  ran, both answered "connection refused" at once instead of timing out. No rule
+  was added.
+- Caddy had a Let's Encrypt certificate within a minute of `up`.
+- After a shelve and unshelve that changed the IP, the site came back over HTTPS by
+  itself about a minute after boot, with nobody logged in.
 
 ## Check it from your laptop
 
@@ -428,8 +445,8 @@ After anything users noticed, write a short postmortem from
 
 | Symptom | Likely cause and fix |
 | --- | --- |
-| `ssh` times out | TEAM02 is shelved, or the IP changed after an unshelve. Check Exosphere. |
-| `ssh` says the host key changed | You are using an old IP that now belongs to another machine. Get the current IP from Exosphere. |
+| `ssh` times out | TEAM02 is shelved, or it is still booting. Check Exosphere, and connect with the hostname rather than an IP. |
+| `ssh` says the host key changed | You used an old IP that now belongs to another machine (this happened on Nov 20). Don't override the warning; connect with the hostname. |
 | `/admin/generate` or `/ready` returns 503 | The llm container is not ready. Check `docker compose ps` and `docker compose logs llm`. |
 | `app` keeps restarting | Usually a config error at startup. `docker compose logs app` shows which setting failed validation, e.g. `LLM_PROVIDER=echo` in production. |
 | Build fails with "no space left on device" | Check `df -h /`; remove old images with `docker image prune`. Do not delete the `llm-models` volume unless you want to download the model again. |
