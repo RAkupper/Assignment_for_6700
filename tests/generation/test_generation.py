@@ -18,8 +18,17 @@ from qdrant_client.http.exceptions import ResponseHandlingException
 from myapp import app as app_module
 from myapp.app import app, get_generation_service, get_model_client
 from myapp.generation.schemas import QuestionRequest
-from myapp.generation.service import GenerationService, GenerationSettings
-from myapp.model_client import EchoModelClient, ModelTimeoutError
+from myapp.generation.service import (
+    MODEL_UNAVAILABLE,
+    GenerationService,
+    GenerationSettings,
+)
+from myapp.model_client import (
+    EchoModelClient,
+    ModelClientError,
+    ModelTimeoutError,
+    ModelUnavailableError,
+)
 from myapp.vectordb.loader import build, point_id
 from myapp.vectordb.search import Searcher, SearchSettings
 from tests.fakes import FakeModelClient
@@ -263,17 +272,38 @@ def test_qdrant_failure_becomes_503(
     monkeypatch.setattr(generation.searcher, "search", fail)
     client, model = api
     response = client.post("/ask", json={"question": "test"})
-    assert response.status_code == 503
+    assert response.status_code == 503  # nothing to show without retrieval
     assert "Retrieval unavailable" in response.json()["detail"]
+    assert response.headers["Retry-After"] == "30"
     assert model.prompts == []
 
 
-def test_llm_timeout_keeps_existing_error_mapping(
-    api: tuple[TestClient, FakeModelClient],
+@pytest.mark.parametrize(
+    "error",
+    [
+        ModelTimeoutError("timed out"),
+        ModelUnavailableError("could not reach model server"),
+        ModelClientError("unexpected response"),
+    ],
+)
+def test_model_failure_still_returns_the_evidence(
+    api: tuple[TestClient, FakeModelClient], error: Exception
 ) -> None:
+    """Retrieval worked, so the user gets the passages and a plain explanation."""
     client, model = api
-    model.error = ModelTimeoutError("timed out")
-    assert client.post("/ask", json={"question": "Form I-983"}).status_code == 504
+    model.error = error
+
+    response = client.post("/ask", json={"question": "Form I-983"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "model_unavailable"
+    assert body["answer"] == MODEL_UNAVAILABLE
+    assert body["sources"]
+    assert (
+        body["sources"]
+        == client.post("/retrieve", json={"question": "Form I-983"}).json()
+    )
 
 
 def test_searcher_is_created_once_and_closed(
@@ -530,7 +560,7 @@ def _held_api(
     return started, release
 
 
-def test_busy_slots_return_503_without_calling_the_model(
+def test_busy_slots_return_evidence_without_calling_the_model(
     api: tuple[TestClient, FakeModelClient],
     generation: GenerationService,
     monkeypatch: pytest.MonkeyPatch,
@@ -542,8 +572,9 @@ def test_busy_slots_return_503_without_calling_the_model(
         try:
             assert started.wait(timeout=5)
             busy = client.post("/ask", json={"question": "Form I-983"})
-            assert busy.status_code == 503
-            assert "busy" in busy.json()["detail"]
+            assert busy.status_code == 200
+            assert busy.json()["status"] == "model_unavailable"
+            assert busy.json()["sources"]
             assert client.post("/retrieve", json={"question": "Form I-983"}).is_success
         finally:
             release.set()
@@ -576,9 +607,11 @@ def test_failed_generation_frees_its_slot(
     )
     generation._slots = threading.BoundedSemaphore(1)
     model.error = ModelTimeoutError("timed out")
-    assert client.post("/ask", json={"question": "Form I-983"}).status_code == 504
+    failed = client.post("/ask", json={"question": "Form I-983"})
+    assert failed.json()["status"] == "model_unavailable"
     model.error = None
-    assert client.post("/ask", json={"question": "Form I-983"}).status_code == 200
+    answered = client.post("/ask", json={"question": "Form I-983"})
+    assert answered.json()["status"] == "answered"
 
 
 def test_not_covered_answer_does_not_wait_for_a_busy_slot(

@@ -87,6 +87,9 @@ def get_model_client(request: Request) -> ModelClient:
     return client
 
 
+RETRY_AFTER_S = 30
+
+
 class ErrorResponse(BaseModel):
     """Typed body returned when the model backend fails."""
 
@@ -99,14 +102,18 @@ async def model_error_handler(request: Request, exc: ModelClientError) -> JSONRe
 
     The message names the failure but never echoes credentials or the prompt.
     """
+    headers = {}
     if isinstance(exc, ModelTimeoutError):
         status_code = 504
     elif isinstance(exc, ModelUnavailableError):
         status_code = 503
+        headers["Retry-After"] = str(RETRY_AFTER_S)  # usually a restart or a full queue
     else:
         status_code = 502
     body = ErrorResponse(detail=str(exc))
-    return JSONResponse(status_code=status_code, content=body.model_dump())
+    return JSONResponse(
+        status_code=status_code, content=body.model_dump(), headers=headers
+    )
 
 
 class HealthResponse(BaseModel):
