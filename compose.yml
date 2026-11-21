@@ -15,12 +15,11 @@
 #   LLM_BASE_URL=http://10.1.82.181:8000/v1
 #   LLM_MODEL=Qwen/Qwen2.5-14B-Instruct-AWQ
 #
-# Ingestion output, Qdrant storage and the embedding model cache live under
-# DATA_VOLUME_DIR: the 20 GB Jetstream2 volume on TEAM02 (set it in .env), or
-# ./volume on a laptop. The root disk is almost full, so nothing big goes there.
-# On TEAM02, Docker's own data (images in /var/lib/containerd, the llm-models
-# volume in /var/lib/docker) is bind-mounted from the volume too; see "Data volume"
-# in docs/deployment.md.
+# Ingestion output, Qdrant storage and the embedding model cache live in named
+# Docker volumes, so the stack runs the same on any machine with Docker. On TEAM02,
+# Docker's own storage (/var/lib/docker, /var/lib/containerd) is bind-mounted from
+# the 40 GB Jetstream2 volume, so these volumes land there and not on the root
+# disk; see "Data volume" in docs/deployment.md.
 
 services:
   llm:
@@ -57,8 +56,8 @@ services:
     environment:
       QDRANT__TELEMETRY_DISABLED: "true"
     volumes:
-      - ${DATA_VOLUME_DIR:-./volume}/qdrant:/qdrant/storage
-      - ${DATA_VOLUME_DIR:-./volume}/qdrant-snapshots:/qdrant/snapshots
+      - qdrant-storage:/qdrant/storage
+      - qdrant-snapshots:/qdrant/snapshots
     # The image has no curl, so ask /readyz over bash's /dev/tcp.
     healthcheck:
       test:
@@ -94,7 +93,7 @@ services:
       GENERATION_QUEUE_TIMEOUT_S: ${GENERATION_QUEUE_TIMEOUT_S:-60}
       FORWARDED_ALLOW_IPS: ${FORWARDED_ALLOW_IPS:-127.0.0.1}  # "*" only behind Caddy
     volumes:
-      - ${DATA_VOLUME_DIR:-./volume}/embed-cache:/embed-cache
+      - embed-cache:/embed-cache
     ports:
       - "${APP_BIND:-127.0.0.1}:8000:8000"  # this machine only; outside goes via Caddy
     depends_on:
@@ -137,8 +136,8 @@ services:
       INGEST_DATA_DIR: /data
       EMBED_CACHE_DIR: /embed-cache
     volumes:
-      - ${DATA_VOLUME_DIR:-./volume}/data:/data
-      - ${DATA_VOLUME_DIR:-./volume}/embed-cache:/embed-cache
+      - catalog-data:/data
+      - embed-cache:/embed-cache
     depends_on:
       qdrant:
         condition: service_healthy
@@ -151,5 +150,9 @@ services:
 volumes:
   llm-models:
     name: llm-models
+  catalog-data:  # catalog.sqlite, raw downloads and catalog backups
+  qdrant-storage:
+  qdrant-snapshots:
+  embed-cache:  # BGE and BM25 models; rebuilt on demand if lost
   caddy-data:
   caddy-config:

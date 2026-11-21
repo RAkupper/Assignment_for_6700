@@ -21,10 +21,10 @@ Requirements: Docker, network access for initial downloads, and available disk
 space. For Jetstream2, configure the extra disk as described in
 [deployment.md](deployment.md#data-volume-first-time-only).
 
-`DATA_VOLUME_DIR` defaults to `./volume`. Ingestion stores its catalog at
-`./volume/data/catalog.sqlite`, Qdrant stores its index under `./volume/qdrant`,
-and both the API and jobs use `./volume/embed-cache`. Setting `DATA_VOLUME_DIR`
-changes the shared root for all three. Generated data is excluded from Git.
+Data lives in named Docker volumes: ingestion stores its catalog at
+`/data/catalog.sqlite` in `catalog-data`, Qdrant stores its index in
+`qdrant-storage`, and both the API and jobs use `embed-cache`. Nothing depends on
+a host path, and generated data never enters the clone or Git.
 
 An existing development `.env` overrides deployment defaults. Before running
 Compose, review it: use `LLM_PROVIDER=openai`,
@@ -54,9 +54,9 @@ curl http://localhost:8000/ask \
   -d '{"question":"What does Form I-983 relate to?","visa_type":"F-1"}'
 ```
 
-If a current catalog already exists, place a consistent database copy at
-`$DATA_VOLUME_DIR/data/catalog.sqlite` (or `./volume/data/catalog.sqlite` when
-unset), migrate it, and skip fetch/parse. The loader defaults to `/data/catalog.sqlite`
+If a current catalog already exists, copy it into the `catalog-data` volume as in
+[deployment.md](deployment.md#look-at-or-copy-the-data), migrate it, and skip
+fetch/parse. The loader defaults to `/data/catalog.sqlite`
 inside jobs, where `INGEST_DATA_DIR=/data` is explicitly configured.
 
 Jobs run only when requested with `docker compose run`; normal `up` starts app,
@@ -120,14 +120,14 @@ is the team's llama.cpp container running Qwen.
 
 | Mount or volume | Contents |
 | --- | --- |
-| `$DATA_VOLUME_DIR/data:/data` | Jobs read/write the raw files and SQLite catalog |
-| `$DATA_VOLUME_DIR/qdrant:/qdrant/storage` | Qdrant vectors, text, and metadata |
-| `$DATA_VOLUME_DIR/qdrant-snapshots:/qdrant/snapshots` | Qdrant snapshot storage |
-| `$DATA_VOLUME_DIR/embed-cache:/embed-cache` | BGE/BM25 cache shared by jobs and API |
-| `llm-models:/models` | llama.cpp generation model files, managed by Docker |
+| `catalog-data:/data` | Jobs read/write the raw files and SQLite catalog |
+| `qdrant-storage:/qdrant/storage` | Qdrant vectors, text, and metadata |
+| `qdrant-snapshots:/qdrant/snapshots` | Qdrant snapshot storage |
+| `embed-cache:/embed-cache` | BGE/BM25 cache shared by jobs and API |
+| `llm-models:/models` | llama.cpp generation model files |
 
-The first four mounts use `./volume` if `DATA_VOLUME_DIR` is unset. The model's
-named volume uses Docker's storage location; it is not moved by `DATA_VOLUME_DIR`.
+All five are named volumes in Docker's storage location. On TEAM02 that location is on
+the 40 GB Jetstream2 volume; see [deployment.md](deployment.md#data-volume-first-time-only).
 
 The API creates one searcher per process. Synchronous endpoints run in FastAPI's
 worker pool. A lock serializes access to shared embedding models; LLM generation
@@ -200,17 +200,17 @@ smoke test does not certify answer accuracy or attribution quality.
 
 ## Where local data lives
 
-With the default `DATA_VOLUME_DIR=./volume`:
+In named Docker volumes:
 
-- `volume/data/catalog.sqlite`: parsed provisions and ingestion history.
-- `volume/data/raw/`: downloaded raw snapshots.
-- `volume/qdrant/`: vectors, source text, and metadata used by retrieval.
-- `volume/embed-cache/`: downloaded BGE/BM25 resources.
-- `llm-models`: Docker-managed volume containing generation model files.
+- `catalog-data`: `catalog.sqlite` (parsed provisions and ingestion history) and
+  `raw/` (downloaded raw snapshots).
+- `qdrant-storage`: vectors, source text, and metadata used by retrieval.
+- `embed-cache`: downloaded BGE/BM25 resources.
+- `llm-models`: generation model files.
 
-`volume/`, `data/`, and `.env` are excluded from Git and Docker build context.
+`data/`, `volume/` and `.env` are excluded from Git and Docker build context.
 Ordinary `git add`/`git commit` therefore excludes runtime data and local secrets;
 do not force-add ignored files. Model weights in Docker volumes are also outside
-the repository. Deleting/recreating containers preserves bind-mounted files;
-explicitly deleting storage is a separate operation. The local smoke dataset
+the repository. Deleting/recreating containers preserves named volumes;
+only `docker compose down -v` or `docker volume rm` deletes them. The local smoke dataset
 created during the walkthrough contains one 2026-09-30 snapshot, not full history.
