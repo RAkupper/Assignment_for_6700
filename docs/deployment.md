@@ -2,6 +2,8 @@
 
 How the service runs on our team instance, how to start and check it, and what to
 do when something breaks. The stack is defined in [`compose.yml`](../compose.yml).
+For the exact commands of each routine task and their expected output, see the
+[runbook](runbook.md).
 
 ## What runs where
 
@@ -34,15 +36,18 @@ TEAM02 (Jetstream2 m3.small: 2 vCPUs, 6 GB RAM, 20 GB root disk + 40 GB volume)
 
 1. In [Exosphere](https://jetstream2.exosphere.app), open TEAM02. If it is shelved,
    choose **Actions → Unshelve** and wait for **Ready**.
-2. Copy the **public IP** from the instance page. It can change on unshelve while
-   Jetstream2 is short of floating IPs (it moved to `149.165.153.173` on Oct 28),
-   so check it each time. SSH then says the host key is known under the old IP;
-   answer `yes`.
+2. Use the instance's hostname, `team02.cis240466.projects.jetstream-cloud.org`,
+   not its IP. The public IP can change on unshelve (it changed twice on Oct 28 and
+   twice on Nov 20, and one old IP went to another project's machine), but the
+   hostname's DNS record follows it, so nothing needs updating.
 3. From your laptop (your SSH key must be in the instance's `authorized_keys`):
 
    ```bash
-   ssh exouser@<public-ip>
+   ssh exouser@team02.cis240466.projects.jetstream-cloud.org
    ```
+
+   The first time, check that SSH shows the host key
+   `SHA256:P3MOMLulOLoEUUm1IJ8DnZTVCjap2jvZdEr9cztdOHA` before answering `yes`.
 
 4. On the instance, from a fresh clone:
 
@@ -179,6 +184,11 @@ the main branch's stack: 25 s, before and after identical, the app afterwards on
 `127.0.0.1:8000` only. The volumes came out the same size as the folders (Qdrant 25 MB,
 its files stay sparse).
 
+Run on TEAM02 itself on Nov 21: before and after identical (alias `provisions` ->
+`provisions_v2`, 3,882 points in both collections, catalog ok), with `/var/lib/docker`
+on the 40 GB volume. The evaluation set from #58 scored 19/25 before and after the
+move.
+
 Once it passes, remove `DATA_VOLUME_DIR` from `.env`; Compose no longer reads it.
 Keep the old folders until a backup has been taken and the
 [restore drill](#restore-drill) passes, then delete them:
@@ -217,7 +227,8 @@ The m3.small has 2 vCPUs and 6 GB RAM, shared by every container.
 - `llm` runs two slots with 4096 tokens each (`-c 8192 -np 2`), and the app lets at
   most that many questions use them (`GENERATION_MAX_CONCURRENT`, set from
   `LLM_PARALLEL`). A third question waits up to `GENERATION_QUEUE_TIMEOUT_S` (60 s)
-  for a slot, then gets 503 "busy". `/retrieve` and questions the index cannot
+  for a slot, then gets the retrieved passages with `status: "model_unavailable"`.
+  Measured Nov 6, six questions at once still all got answers within 64 s. `/retrieve` and questions the index cannot
   answer do not call the model, so they never wait for a slot. Change both slot settings together: `LLM_CTX_SIZE` is 4096 times
   `LLM_PARALLEL`.
 
@@ -408,6 +419,15 @@ returned the same ranking as the original. Rebuilding the same data from eCFR to
 `.env` is gitignored; keep the admin key there and nowhere else. The certificate is
 in the `caddy-data` volume and renews itself.
 
+On TEAM02 (Nov 21) the app is at https://team02.cis240466.projects.jetstream-cloud.org:
+
+- Exosphere's default security group already let 80 and 443 through: before Caddy
+  ran, both answered "connection refused" at once instead of timing out. No rule
+  was added.
+- Caddy had a Let's Encrypt certificate within a minute of `up`.
+- After a shelve and unshelve that changed the IP, the site came back over HTTPS by
+  itself about a minute after boot, with nobody logged in.
+
 ## Check it from your laptop
 
 ```bash
@@ -434,13 +454,122 @@ curl -m 5 http://<public-ip>:6333/  # refused or times out (Qdrant)
 Without a key, `/admin/generate` answers 404 when `APP_ADMIN_API_KEY` is unset and
 401 when it is set. The 11th `/ask` within a minute from one address answers 429.
 
+## Time limits and retries
+
+Every wait on another program has a limit, and each layer gives up after the one
+behind it, so the user sees the inner layer's clear answer instead of a hung page:
+
+| Layer | Gives up after | Then the user sees |
+| --- | --- | --- |
+| A question waiting for an answer slot | 60 s (`GENERATION_QUEUE_TIMEOUT_S`) | the passages, `status: "model_unavailable"` |
+| The model call, retries included | 120 s (`LLM_TIMEOUT_S`) | the passages, `status: "model_unavailable"` |
+| Caddy waiting for the app | 200 s (`response_header_timeout` in `Caddyfile`) | "The answer took too long" (504) |
+| The page waiting for Caddy | 210 s (`ASK_LIMIT_MS` in `app.js`) | "The answer took too long" |
+| A Qdrant search or readiness check | 5 s (`QDRANT_TIMEOUT_S`; 60 s in the jobs container) | 503 with `Retry-After` |
+
+A search takes well under 0.2 s: in the evaluation runs, questions the index can't
+answer came back in 0.1 s through the whole stack, search included. 5 s gives up on a
+stuck Qdrant long before a question would wait for a model slot.
+
+The app's worst case is about 185 s: a full queue wait, then a model call that runs
+out its budget. Caddy's 200 s sits above that, so Caddy only answers 504 when the app
+itself is stuck. A stopped app gets a 502 at once, which the page shows as "The
+service is restarting".
+
+Retries happen in one place, the model client, so they don't multiply (page × app ×
+client). It retries only when nothing was generated: the connection was refused or
+never opened, or llama.cpp answered 429, 502 or 503 (still loading, or full). It waits with exponential
+backoff and full jitter, so many requests failing together don't come back together.
+It honors `Retry-After`, and gives up at once if the server asks for more than
+`LLM_RETRY_MAX_WAIT_S`. A read timeout is never retried: the model may still be
+working, and a second request would double its load. Ingestion's `PoliteClient`,
+which retries federal sites on 429 and 5xx, now jitters its backoff too, but never
+below half of it, to stay polite.
+
+`LLM_MAX_RETRIES` is 3 because a llama.cpp restart took 2.8 s until it served again.
+With a question sent 0.5 s into a restart, 2 retries answered 3 of 8 times and 3
+retries 7 of 8; the rest got the passages.
+
+Measured Nov 6 through Caddy on a 2-CPU, 7 GB machine (TEAM02 has 2 vCPUs, 6 GB), with
+Qwen2.5-1.5B Q4_K_M, the real 8 CFR 214 index, and the page in Chrome:
+
+| What happened | What the user got |
+| --- | --- |
+| One question, model just restarted | answer in 18.7 s |
+| 3 questions at once (2 slots) | all answered, in 22, 29 and 37 s |
+| 6 questions at once (5 need the model) | all answered within 64 s; the queue never hit 60 s |
+| Queue limit set to 5 s, 3 at once | 2 answered; the third got its passages at 5.2 s |
+| llm stopped | passages in 1.4 s (2 retries) and 5.3 s on the page (3 retries) |
+| llm frozen | passages at 120.1 s |
+| App stopped, page already open | "The service is restarting" at once (Caddy 502 in 0.01 s) |
+| App frozen | "The answer took too long" at 200.1 s (Caddy 504 at 200.0 s) |
+| 11th question in a minute | "Too many requests: at most 10 a minute. Try again in 60 seconds." |
+
+`scripts/smoke_rag.py` passed on the healthy stack (13.4 s) and failed with llm
+stopped, so an evidence-only answer can't pass for a working one.
+
+## Release and deploy
+
+TEAM02 runs released images from the GitHub Container Registry, not code built on
+the instance. A release is a version in `pyproject.toml`, a Git tag, and the image
+CI publishes under that tag.
+
+### Cut a release (on your laptop)
+
+1. In a pull request, set the new version in `pyproject.toml` (`0.2.0` → `0.3.0`,
+   following [semantic versioning](https://semver.org)), run `uv lock`, and add a
+   section to `CHANGELOG.md` saying what changed for users. Merge it.
+2. Tag the merge commit on `main` and push the tag:
+
+   ```bash
+   git switch main && git pull
+   git tag v0.3.0
+   git push origin v0.3.0
+   ```
+
+3. Wait for the CI run on the tag (Actions tab). It fails if the tag doesn't match
+   `pyproject.toml`, and its summary shows the digest it published.
+
+### Deploy it, or roll back (on TEAM02)
+
+The same command does both: give it the version to run.
+
+```bash
+cd ~/Assignment_for_6700
+scripts/deploy.sh v0.3.0   # deploy
+scripts/deploy.sh v0.2.0   # roll back to the release before
+```
+
+It checks out the tag (so `compose.yml` and the `Caddyfile` match the image), pulls the
+image, pins its digest in `.env` as `APP_IMAGE`, runs pending catalog migrations
+(each backs the catalog up first), starts the stack, waits for `/ready`, checks that
+`/health` reports the version, and runs the evaluation set (about 10 minutes;
+`SKIP_EVAL=1` skips it). When it worked, the last line says
+`deployed v0.3.0: eval 19/25`, and `deploy.log` gets a line like:
+
+```text
+2026-11-24T20:15:02Z v0.3.0 ghcr.io/rakupper/assignment_for_6700@sha256:eb14b8b1... ok eval 19/25
+```
+
+When a check fails, it writes a `failed` line with the reason, prints the app's last
+log lines, and tells you which version to roll back to. The checkout stays on the
+tag (a detached HEAD), which is expected: deploy with the script, not `git pull`.
+
+`APP_IMAGE` in `.env` is what makes a release stick: restarts, reboots and a plain
+`docker compose up -d` all use that digest. Without it, Compose builds the image from
+the checkout. That is how you try an unreleased branch: delete the `APP_IMAGE` line
+from `.env`, then `git switch <branch> && docker compose up -d --build`. Run
+`scripts/deploy.sh` again afterwards to get back to a release.
+
 ## Everyday commands (on the instance, in `~/Assignment_for_6700`)
 
 | Task | Command |
 | --- | --- |
 | Status and health | `docker compose ps` |
 | Follow the logs | `docker compose logs -f app` (or `llm`) |
-| Pull new code and rebuild the app | `git pull && docker compose up -d --build` |
+| Deploy a release, or roll back to an older one | `scripts/deploy.sh v0.2.0` |
+| Which releases ran, and how they did | `cat deploy.log` |
+| Try an unreleased branch | `git switch <branch> && docker compose up -d --build`, after removing `APP_IMAGE` from `.env` |
 | Stop the stack (keeps the model volume) | `docker compose down` |
 | Disk usage | `docker system df`, `df -h /` and `df -h /media/volume/team02-data` |
 | Qdrant collections and point counts | `docker compose run --rm jobs python -m myapp.vectordb.collection status` |
@@ -467,12 +596,42 @@ LLM_BASE_URL=http://10.1.82.181:8000/v1
 LLM_MODEL=Qwen/Qwen2.5-14B-Instruct-AWQ
 ```
 
+## When something breaks
+
+A tester writes "it's been down for an hour". Check in this order, on the instance:
+
+1. `docker compose ps`. `Restarting (1)` is a crash loop; `unhealthy` means the
+   health check fails; a missing service means it was stopped (`unless-stopped` keeps a
+   stopped container down, even after a reboot).
+2. `docker compose logs --tail 50 app` (or `llm`, `qdrant`, `caddy`). A crash loop
+   usually ends in a settings `ValidationError` that names the variable. Restarting
+   won't fix a bad setting; fix `.env` and `docker compose up -d`.
+3. `curl -s localhost:8000/ready`. It names the missing dependency: the model, the
+   Qdrant alias, or an empty index.
+4. `df -h / /media/volume/team02-data` and `free -m`. A full disk or memory stops
+   Docker, Qdrant or llama.cpp before any log says why.
+5. From your laptop, `curl -I https://<name>/health`. A 502 means Caddy is up and
+   the app isn't; no answer at all means Caddy, the instance or the IP is down (the IP
+   can change on unshelve).
+
+| What users report | Most likely | Check |
+| --- | --- | --- |
+| "The answer took too long" | the model is slow or stuck | `docker compose logs llm`, `docker stats` |
+| "No written answer right now" on every question | llm is down or unhealthy | `docker compose ps llm`; the passages still work |
+| "Too many requests" for everyone | everyone shares Caddy's address | `FORWARDED_ALLOW_IPS=*` in `.env` |
+| "The service is restarting" for minutes | app crash loop | steps 1 and 2 |
+| Answers cite old rules | the alias points at an old collection | `python -m myapp.vectordb.collection status` via jobs |
+
+After anything users noticed, write a short postmortem from
+[postmortems/TEMPLATE.md](postmortems/TEMPLATE.md) as
+`docs/postmortems/<date>-<what>.md`, and link it in the group chat.
+
 ## Troubleshooting
 
 | Symptom | Likely cause and fix |
 | --- | --- |
-| `ssh` times out | TEAM02 is shelved, or the IP changed after an unshelve. Check Exosphere. |
-| `ssh` says the host key changed | You are using an old IP that now belongs to another machine. Get the current IP from Exosphere. |
+| `ssh` times out | TEAM02 is shelved, or it is still booting. Check Exosphere, and connect with the hostname rather than an IP. |
+| `ssh` says the host key changed | You used an old IP that now belongs to another machine (this happened on Nov 20). Don't override the warning; connect with the hostname. |
 | `/admin/generate` or `/ready` returns 503 | The llm container is not ready. Check `docker compose ps` and `docker compose logs llm`. |
 | `app` keeps restarting | Usually a config error at startup. `docker compose logs app` shows which setting failed validation, e.g. `LLM_PROVIDER=echo` in production. |
 | Build fails with "no space left on device" | Check `df -h /`; remove old images with `docker image prune`. Do not delete the `llm-models` volume unless you want to download the model again. |

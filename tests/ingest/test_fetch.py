@@ -232,3 +232,25 @@ def test_client_retries_then_returns_the_last_answer(
     clock = Clock()
     always = client(settings, lambda r: httpx2.Response(503), clock)
     assert always.get("https://www.ecfr.gov/a").status_code == 503
+
+
+def test_backoff_is_jittered_but_never_under_half(settings: IngestSettings) -> None:
+    """Many clients retrying together spread out instead of arriving at once."""
+    clock = Clock()
+    picked: list[tuple[float, float]] = []
+
+    def jitter(low: float, high: float) -> float:
+        picked.append((low, high))
+        return high
+
+    polite = PoliteClient(
+        settings,
+        httpx2.MockTransport(lambda r: httpx2.Response(503)),
+        sleep=clock.sleep,
+        clock=clock,
+        jitter=jitter,
+    )
+    polite.get("https://www.ecfr.gov/a")
+
+    assert picked == [(0.0, 0.5), (0.0, 1.0), (0.0, 2.0)][: settings.max_retries]
+    assert clock.sleeps == [1.0, 2.0, 4.0][: settings.max_retries]

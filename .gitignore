@@ -54,3 +54,6 @@ volume/
 
 # Ingestion output and generated RAG catalogs; keep data out of git
 data/
+
+# Deploy history written by scripts/deploy.sh on the instance
+deploy.log

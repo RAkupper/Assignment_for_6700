@@ -1,0 +1,217 @@
+[
+  {
+    "id": "oncampus-hours",
+    "kind": "answer",
+    "question": "How many hours can I work on campus?",
+    "visa_type": "F-1",
+    "expect_sources": ["8 CFR 214.2(f)(9)(i)"],
+    "answer_has": ["\\b20\\b"],
+    "origin": "page example, #47.1"
+  },
+  {
+    "id": "form-i983",
+    "kind": "answer",
+    "question": "What does Form I-983 relate to?",
+    "visa_type": "F-1",
+    "expect_sources": ["8 CFR 214.2(f)(10)(ii)(C)*"],
+    "answer_has": ["STEM|training plan"],
+    "origin": "page example, #46.7"
+  },
+  {
+    "id": "offcampus-work",
+    "kind": "answer",
+    "question": "Can I work off campus?",
+    "visa_type": "F-1",
+    "expect_sources": ["8 CFR 214.2(f)(9)(ii)*"],
+    "origin": "#47.1",
+    "note": "Off-campus rules should rank above the on-campus ones."
+  },
+  {
+    "id": "oncampus-jobs",
+    "kind": "answer",
+    "question": "How many jobs can I have on campus at a time?",
+    "visa_type": "F-1",
+    "expect_sources": ["8 CFR 214.2(f)(9)(i)"],
+    "origin": "#49.8"
+  },
+  {
+    "id": "grace-period-today",
+    "kind": "answer",
+    "question": "How long can I stay in the US after graduation?",
+    "visa_type": "F-1",
+    "expect_sources": ["8 CFR 214.2(f)(5)(v)"],
+    "answer_has": ["\\b30\\b"],
+    "origin": "#48.3, #48.10",
+    "note": "Since the 2026 rule the period is 30 days, in (f)(5)(v)."
+  },
+  {
+    "id": "grace-period-2023",
+    "kind": "answer",
+    "question": "How long can I stay in the US after graduation?",
+    "visa_type": "F-1",
+    "as_of": "2023-08-01",
+    "expect_sources": ["8 CFR 214.2(f)(5)(iv)"],
+    "answer_has": ["\\b60\\b"],
+    "origin": "#48.10",
+    "note": "Before the 2026 rule it was 60 days, in (f)(5)(iv). Same question as above on another date."
+  },
+  {
+    "id": "grace-period-all-visas",
+    "kind": "answer",
+    "question": "How long can I stay in the US after graduation?",
+    "expect_sources": ["8 CFR 214.2(f)(5)(v)", "8 CFR 214.2(j)(1)(ii)*"],
+    "forbid_sources": ["8 CFR 214.2(q)*"],
+    "origin": "#48.3",
+    "note": "With All visa types a Q-2 (Irish peace process) passage came back."
+  },
+  {
+    "id": "degree-years",
+    "kind": "answer",
+    "question": "How many years can I work on my Bachelor's Degree for?",
+    "visa_type": "F-1",
+    "expect_sources": ["8 CFR 214.2(f)(5)(i)*"],
+    "answer_has": ["\\b4\\b|four"],
+    "origin": "#46.3",
+    "note": "The tester's wording. Since 2026 an F-1 admission is a fixed period of up to 4 years."
+  },
+  {
+    "id": "cpt-first-year",
+    "kind": "answer",
+    "question": "Can I do curricular practical training in my first year?",
+    "visa_type": "F-1",
+    "expect_sources": ["8 CFR 214.2(f)(10)(i)", "8 CFR 214.2(f)(10)"],
+    "origin": "core"
+  },
+  {
+    "id": "opt-length",
+    "kind": "answer",
+    "question": "How long is post-completion OPT?",
+    "visa_type": "F-1",
+    "expect_sources": ["8 CFR 214.2(f)(10)", "8 CFR 214.2(f)(10)(ii)(A)*"],
+    "answer_has": ["\\b12\\b|twelve"],
+    "origin": "core"
+  },
+  {
+    "id": "opt-unemployment",
+    "kind": "answer",
+    "question": "How many days of unemployment are allowed during OPT?",
+    "visa_type": "F-1",
+    "expect_sources": ["8 CFR 214.2(f)(10)(ii)(E)"],
+    "answer_has": ["\\b90\\b"],
+    "origin": "core"
+  },
+  {
+    "id": "stem-opt-length",
+    "kind": "answer",
+    "question": "How long is the STEM OPT extension?",
+    "visa_type": "F-1",
+    "expect_sources": ["8 CFR 214.2(f)(10)(ii)(C)*"],
+    "answer_has": ["\\b24\\b"],
+    "origin": "core"
+  },
+  {
+    "id": "reduced-load-medical",
+    "kind": "answer",
+    "question": "Can I take a reduced course load because of a medical condition?",
+    "visa_type": "F-1",
+    "expect_sources": ["8 CFR 214.2(f)(6)(iii)(B)", "8 CFR 214.2(f)(6)(iii)"],
+    "answer_has": ["12 months|twelve months"],
+    "origin": "core"
+  },
+  {
+    "id": "transfer-first-year",
+    "kind": "answer",
+    "question": "Can I transfer to another school during my first year?",
+    "visa_type": "F-1",
+    "expect_sources": ["8 CFR 214.2(f)(5)(ii)*", "8 CFR 214.2(f)(8)*"],
+    "origin": "core"
+  },
+  {
+    "id": "f2-work",
+    "kind": "answer",
+    "question": "Can my F-2 spouse work?",
+    "visa_type": "F-2",
+    "expect_sources": ["8 CFR 214.2(f)(15)(i)"],
+    "answer_has": ["not"],
+    "answer_lacks": ["^\\W*yes\\b"],
+    "origin": "core"
+  },
+  {
+    "id": "m2-work",
+    "kind": "answer",
+    "question": "Can an M-2 spouse work in the US?",
+    "visa_type": "M-2",
+    "expect_sources": ["8 CFR 214.2(m)(17)(i)"],
+    "answer_has": ["not"],
+    "answer_lacks": ["^\\W*yes\\b"],
+    "origin": "#46.2"
+  },
+  {
+    "id": "m2-school",
+    "kind": "answer",
+    "question": "Can my M-2 child go to school in the US?",
+    "visa_type": "M-2",
+    "expect_sources": ["8 CFR 214.2(m)(17)(ii)*"],
+    "origin": "#46.2, #46.5"
+  },
+  {
+    "id": "m1-work",
+    "kind": "answer",
+    "question": "Can an M-1 student work while studying?",
+    "visa_type": "M-1",
+    "expect_sources": ["8 CFR 214.2(m)(13)", "8 CFR 214.2(m)(14)*"],
+    "origin": "#46.5"
+  },
+  {
+    "id": "j1-stay",
+    "kind": "answer",
+    "question": "How long can a J-1 exchange visitor stay after the program ends?",
+    "visa_type": "J-1",
+    "expect_sources": ["8 CFR 214.2(j)(1)(ii)*"],
+    "answer_has": ["\\b30\\b"],
+    "origin": "#46.5"
+  },
+  {
+    "id": "j2-work",
+    "kind": "answer",
+    "question": "Can a J-2 spouse work?",
+    "visa_type": "J-2",
+    "expect_sources": ["8 CFR 214.2(j)(1)(v)"],
+    "answer_has": ["authoriz"],
+    "origin": "#46.5"
+  },
+  {
+    "id": "f4-stem-opt",
+    "kind": "answer",
+    "question": "Can an F-4 visa holder apply for STEM OPT?",
+    "visa_type": "F-1",
+    "answer_lacks": ["^\\W*yes\\b"],
+    "origin": "#47.10",
+    "note": "There is no F-4 class, so the answer must not say yes."
+  },
+  {
+    "id": "off-topic-capital",
+    "kind": "decline",
+    "question": "What is the capital of France?",
+    "origin": "core"
+  },
+  {
+    "id": "off-topic-pizza",
+    "kind": "decline",
+    "question": "What's the best pizza near Georgetown?",
+    "origin": "core"
+  },
+  {
+    "id": "too-vague",
+    "kind": "decline",
+    "question": "Program limitations?",
+    "origin": "#46.6",
+    "note": "Too vague to answer from the rules. It got an answer about severe economic hardship."
+  },
+  {
+    "id": "lone-question-mark",
+    "kind": "decline",
+    "question": "?",
+    "origin": "#48.9"
+  }
+]

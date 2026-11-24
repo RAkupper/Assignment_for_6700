@@ -4,6 +4,7 @@ import asyncio
 import secrets
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
+from importlib.metadata import version
 from pathlib import Path
 from typing import Annotated, Literal
 
@@ -52,7 +53,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(
-    title=settings.name, version="0.1.0", debug=settings.debug, lifespan=lifespan
+    title=settings.name,
+    version=version("assignment-1"),  # the one place it is set: pyproject.toml
+    debug=settings.debug,
+    lifespan=lifespan,
 )
 web_dir = Path(__file__).with_name("web")
 app.mount("/assets", StaticFiles(directory=web_dir), name="assets")
@@ -87,6 +91,9 @@ def get_model_client(request: Request) -> ModelClient:
     return client
 
 
+RETRY_AFTER_S = 30
+
+
 class ErrorResponse(BaseModel):
     """Typed body returned when the model backend fails."""
 
@@ -99,14 +106,18 @@ async def model_error_handler(request: Request, exc: ModelClientError) -> JSONRe
 
     The message names the failure but never echoes credentials or the prompt.
     """
+    headers = {}
     if isinstance(exc, ModelTimeoutError):
         status_code = 504
     elif isinstance(exc, ModelUnavailableError):
         status_code = 503
+        headers["Retry-After"] = str(RETRY_AFTER_S)  # usually a restart or a full queue
     else:
         status_code = 502
     body = ErrorResponse(detail=str(exc))
-    return JSONResponse(status_code=status_code, content=body.model_dump())
+    return JSONResponse(
+        status_code=status_code, content=body.model_dump(), headers=headers
+    )
 
 
 class HealthResponse(BaseModel):

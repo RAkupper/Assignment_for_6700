@@ -21,8 +21,12 @@ database with dense (BGE) and sparse (BM25) vectors and filterable metadata. See
 
 ## Contents
 
+- [Architecture](docs/architecture.md) (solution and technical diagrams, where each time
+  limit sits)
 - [Quickstart](#quickstart) (tutorial: clean machine to running service)
 - [Deploy with Compose](#deploy-with-compose) (run everything on an instance)
+- [Runbook](docs/runbook.md) (exact commands for each routine task on TEAM02: deploy,
+  rollback, reboot, shelve, fresh install, and what you should see)
 - [Security](#security) (HTTPS, open ports, admin key, rate limits, pinning)
 - [Docker](#docker) (build, run, and check the container)
 - [Vector database (Qdrant)](#vector-database-qdrant) (collection, loading, rollback)
@@ -582,7 +586,9 @@ anywhere.
 | `LLM_BASE_URL` | `http://localhost:11434/v1` | Server root including `/v1`; must be a valid URL. |
 | `LLM_MODEL` | `qwen2.5:1.5b-instruct` | Model name as the server knows it. |
 | `LLM_API_KEY` | unset | Bearer token for hosted APIs; kept secret in logs and reprs. |
-| `LLM_TIMEOUT_S` / `LLM_CONNECT_TIMEOUT_S` | `120` / `5` | Seconds; must be positive. |
+| `LLM_TIMEOUT_S` / `LLM_CONNECT_TIMEOUT_S` | `120` / `5` | Seconds; must be positive. `LLM_TIMEOUT_S` bounds a whole call, retries included. |
+| `LLM_MAX_RETRIES` | `3` | Retries when nothing was generated: connection refused or never opened, or 429/502/503. Exponential backoff with full jitter. 0 to 5. |
+| `LLM_RETRY_MAX_WAIT_S` | `10` | Longest wait between tries; a longer `Retry-After` means give up at once. |
 | `LLM_MAX_TOKENS` | `512` | Must be positive. |
 | `LLM_TEMPERATURE` | `0.0` | Between 0 and 2. |
 | `LLM_DEVICE` | `cpu` | `cpu`, `cuda` or `auto`; read by the model server. |
@@ -592,8 +598,10 @@ Those are the code defaults. Under Compose they're set for the llama.cpp contain
 (`LLM_PROVIDER=openai`, `LLM_BASE_URL=http://llm:8080/v1`,
 `LLM_MODEL=qwen2.5-1.5b-instruct`, `LLM_MAX_TOKENS=256`).
 
-Model failures reach clients as `504` (timeout), `503` (server unreachable or
-erroring) or `502` (malformed reply). See
+Model failures reach `/admin/generate` callers as `504` (timeout), `503` (server
+unreachable or erroring, with `Retry-After: 30`) or `502` (malformed reply). `/ask`
+does not fail when only the model does: it returns the retrieved passages with
+`status: "model_unavailable"`. See
 [docs/model-serving.md](docs/model-serving.md) for where the model runs and why.
 
 ### Vector database settings
@@ -605,6 +613,7 @@ erroring) or `502` (malformed reply). See
 | `QDRANT_URL` | `http://localhost:6333` | Qdrant server; must be a valid URL. Under Compose this will be `http://qdrant:6333`. |
 | `QDRANT_API_KEY` | unset | Kept secret in logs and reprs. |
 | `QDRANT_ALIAS` | `provisions` | The name the app queries; versioned collections are `<alias>_v<N>`. |
+| `QDRANT_TIMEOUT_S` | `5` | Seconds before any request to Qdrant gives up (1 to 300). The jobs container uses 60 for bulk loads and snapshots (`QDRANT_JOBS_TIMEOUT_S`). |
 
 `EmbeddingSettings` in `src/myapp/vectordb/encoders.py` reads the `EMBED_` prefix.
 Changing the model is a setting change plus a rebuild into a new collection version.
@@ -690,10 +699,13 @@ See the [RAG guide](docs/rag-quickstart.md) for configuration and examples.
 
 Open `http://localhost:8000/` for the prototype UI. It uses the same API origin,
 displays readiness/errors, and opens source excerpts when a citation is selected.
-`/ask` also returns `status`: `answered` or `insufficient_evidence`. An
-insufficient-evidence answer says the indexed rules do not cover the question and
-points to the school's DSO (or the J-1 Responsible Officer), without calling the
-model. Each eCFR source has a `url` to its paragraph on ecfr.gov, dated to `as_of`
+`/ask` also returns `status`: `answered`, `insufficient_evidence` or
+`model_unavailable`. An insufficient-evidence answer says the indexed rules do not
+cover the question and points to the school's DSO (or the J-1 Responsible Officer),
+without calling the model. When the model is down, times out, or every answer slot
+stays busy for `GENERATION_QUEUE_TIMEOUT_S`, the answer says so and `sources` holds
+the retrieved passages, so the user still sees the evidence. Only a retrieval
+failure is an error (503 with `Retry-After`). Each eCFR source has a `url` to its paragraph on ecfr.gov, dated to `as_of`
 when the question is historical.
 The prompt encourages inline citations, but the prototype does not enforce them
 or retry answers missing them. Retrieved evidence remains visible beside the
@@ -787,7 +799,7 @@ Assignment_for_6700/
 
 ### Continuous integration
 
-`.github/workflows/ci.yml` runs two jobs on every push and pull request, on
+`.github/workflows/ci.yml` runs three jobs on every push and pull request, on
 `ubuntu-latest`. Each action is pinned to a commit SHA, with its version in a comment.
 
 `quality-gates`:
@@ -801,6 +813,19 @@ Assignment_for_6700/
 
 `secret-scan` checks out the full history, installs gitleaks after checking its
 release hash, and runs `gitleaks git` over every commit.
+
+`image` runs once both pass:
+
+1. Build the image as `ghcr.io/rakupper/assignment_for_6700:sha-<commit>`. On a
+   version tag, first check that the tag matches the version in `pyproject.toml`
+2. Smoke-test it with `scripts/smoke_image.sh`: start it on its own and check
+   `/health`, the page at `/`, `/docs`, that it runs as `appuser`, and that no
+   `.env` or `.git` is inside
+3. On a push to `main`, push it to the GitHub Container Registry. On a version tag
+   such as `v0.2.0`, also push it under that tag. Pull requests stop after step 2.
+   The run's summary shows the pushed image's digest.
+
+To smoke-test an image on your own machine: `docker build -t local . && scripts/smoke_image.sh local`.
 
 A failure at any step fails the run. See results under the repository's
 **Actions** tab.

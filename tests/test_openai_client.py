@@ -25,10 +25,48 @@ from myapp.model_client import (
 Handler = Callable[[httpx2.Request], httpx2.Response]
 
 
-def make_client(handler: Handler, **overrides: object) -> OpenAICompatibleClient:
-    """Build a client whose HTTP calls go to an in-memory handler."""
+class FakeTime:
+    """A clock that only moves when the client sleeps; records each wait."""
+
+    def __init__(self) -> None:
+        self.now = 0.0
+        self.sleeps: list[float] = []
+
+    def sleep(self, seconds: float) -> None:
+        self.sleeps.append(seconds)
+        self.now += seconds
+
+    def clock(self) -> float:
+        return self.now
+
+
+def make_client(
+    handler: Handler, time: FakeTime | None = None, **overrides: object
+) -> OpenAICompatibleClient:
+    """Build a client whose HTTP calls go to an in-memory handler, with fake time."""
+    time = time or FakeTime()
     settings = ModelSettings(_env_file=None, provider="openai", **overrides)
-    return OpenAICompatibleClient(settings, transport=httpx2.MockTransport(handler))
+    return OpenAICompatibleClient(
+        settings,
+        transport=httpx2.MockTransport(handler),
+        sleep=time.sleep,
+        clock=time.clock,
+        jitter=lambda low, high: high,  # the longest wait full jitter can pick
+    )
+
+
+def answers(*responses: httpx2.Response | type[Exception]) -> tuple[Handler, list[int]]:
+    """A handler that plays back responses in order and counts the calls."""
+    calls: list[int] = []
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        calls.append(1)
+        item = responses[min(len(calls), len(responses)) - 1]
+        if isinstance(item, type):
+            raise item("failed", request=request)
+        return item
+
+    return handler, calls
 
 
 def completion(content: object) -> httpx2.Response:
@@ -221,3 +259,107 @@ def test_model_errors_map_to_http_status(
     response = TestClient(test_app).get("/boom")
     assert response.status_code == status_code
     assert response.json() == {"detail": str(error)}
+
+
+# Retries
+
+
+@pytest.mark.parametrize("failure", [httpx2.ConnectError, httpx2.ConnectTimeout])
+def test_connection_never_opened_then_up_is_retried_after_backoff(
+    failure: type[Exception],
+) -> None:
+    handler, calls = answers(failure, completion("ok"))
+    time = FakeTime()
+
+    assert make_client(handler, time).generate("hi") == "ok"
+    assert len(calls) == 2
+    assert time.sleeps == [1.0]
+
+
+@pytest.mark.parametrize("status", [429, 502, 503])
+def test_server_not_ready_is_retried_with_growing_waits(status: int) -> None:
+    handler, calls = answers(httpx2.Response(status), httpx2.Response(status))
+    time = FakeTime()
+
+    with pytest.raises(ModelUnavailableError, match=f"HTTP {status}"):
+        make_client(handler, time).generate("hi")
+    assert len(calls) == 4  # one try and LLM_MAX_RETRIES=3
+    assert time.sleeps == [1.0, 2.0, 4.0]
+
+
+def test_full_jitter_never_waits_longer_than_the_backoff() -> None:
+    handler, _ = answers(httpx2.Response(503), completion("ok"))
+    picked: list[tuple[float, float]] = []
+    settings = ModelSettings(_env_file=None, provider="openai")
+    client = OpenAICompatibleClient(
+        settings,
+        transport=httpx2.MockTransport(handler),
+        sleep=lambda s: None,
+        jitter=lambda low, high: picked.append((low, high)) or low,
+    )
+
+    client.generate("hi")
+
+    assert picked == [(0.0, 1.0)]
+
+
+def test_retry_after_is_honored() -> None:
+    handler, calls = answers(
+        httpx2.Response(429, headers={"Retry-After": "3"}), completion("ok")
+    )
+    time = FakeTime()
+
+    assert make_client(handler, time).generate("hi") == "ok"
+    assert time.sleeps == [3.0]
+
+
+def test_retry_after_past_the_cap_gives_up_at_once() -> None:
+    handler, calls = answers(httpx2.Response(503, headers={"Retry-After": "60"}))
+    time = FakeTime()
+
+    with pytest.raises(ModelUnavailableError):
+        make_client(handler, time).generate("hi")
+    assert len(calls) == 1
+    assert time.sleeps == []
+
+
+@pytest.mark.parametrize(
+    "first",
+    [httpx2.Response(500), httpx2.Response(400), httpx2.ReadTimeout],
+)
+def test_errors_after_generation_may_have_started_are_not_retried(
+    first: httpx2.Response | type[Exception],
+) -> None:
+    handler, calls = answers(first, completion("ok"))
+
+    with pytest.raises(ModelClientError):
+        make_client(handler).generate("hi")
+    assert len(calls) == 1
+
+
+def test_no_retries_when_turned_off() -> None:
+    handler, calls = answers(httpx2.Response(503), completion("ok"))
+
+    with pytest.raises(ModelUnavailableError):
+        make_client(handler, max_retries=0).generate("hi")
+    assert len(calls) == 1
+
+
+def test_retries_stop_when_the_time_budget_is_spent() -> None:
+    """LLM_TIMEOUT_S bounds the whole call, so a retry never runs past it."""
+    handler, calls = answers(httpx2.Response(503, headers={"Retry-After": "4"}))
+    time = FakeTime()
+
+    with pytest.raises(ModelUnavailableError):
+        make_client(handler, time, timeout_s=6).generate("hi")
+    assert time.sleeps == [4.0]  # a second 4 s wait would end past 6 s
+    assert len(calls) == 2
+
+
+def test_ping_is_not_retried() -> None:
+    """/ready reports what it sees right now."""
+    handler, calls = answers(httpx2.ConnectError)
+
+    with pytest.raises(ModelUnavailableError):
+        make_client(handler).ping()
+    assert len(calls) == 1

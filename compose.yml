@@ -72,6 +72,9 @@ services:
     restart: unless-stopped
 
   app:
+    # A release from GHCR, pinned by digest in .env by scripts/deploy.sh; without
+    # APP_IMAGE, Compose builds this name from the source.
+    image: ${APP_IMAGE:-assignment_for_6700-app}
     build: .
     env_file:
       - path: .env.production.example
@@ -124,6 +127,7 @@ services:
   #   docker compose run --rm jobs python -m myapp.ingest fetch --part "8 CFR 214"
   # Same image as the app, plus write access to /data.
   jobs:
+    image: ${APP_IMAGE:-assignment_for_6700-app}  # always the same image as app
     build: .
     profiles: [jobs]
     env_file:
@@ -135,6 +139,7 @@ services:
         required: false
     environment:
       QDRANT_URL: ${QDRANT_URL:-http://qdrant:6333}
+      QDRANT_TIMEOUT_S: ${QDRANT_JOBS_TIMEOUT_S:-60}  # bulk upserts and snapshots
       INGEST_DATA_DIR: /data
       EMBED_CACHE_DIR: /embed-cache
     volumes:

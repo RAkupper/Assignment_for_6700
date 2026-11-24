@@ -24,4 +24,6 @@ class Answer(BaseModel):
     answer: str
     # Citation [1] corresponds to sources[0]; text is the excerpt sent to the LLM.
     sources: list[Hit]
-    status: Literal["answered", "insufficient_evidence"] = "answered"
+    status: Literal["answered", "insufficient_evidence", "model_unavailable"] = (
+        "answered"  # model_unavailable: the passages only, no generated answer
+    )
