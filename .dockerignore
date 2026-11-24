@@ -36,3 +36,6 @@ volume/
 
 # Data is supplied at runtime, not included in the application image
 data/
+
+# Deploy history on the instance
+deploy.log
