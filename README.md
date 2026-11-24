@@ -407,7 +407,7 @@ uv run python -m myapp.vectordb.search "Can I work on campus?" --visa F-1
 ```
 
 ```text
-rel 0.812  rrf 1.000  8 CFR 214.2(f)(9)(i)  [regulation, in_force]
+rel 0.812  score 6.950  8 CFR 214.2(f)(9)(i)  [regulation, in_force]
        On-campus employment must be performed on the school premises.
 ```
 
@@ -424,12 +424,15 @@ context = [h.model_dump() for h in hits]
 
 Each hit has `provision_id` (the citation), `score`, `relevance`, `heading_path`,
 `text`, `source`, `authority`, `status`, `visa_types`, `valid_from` and `valid_to`.
-`score` is the RRF rank score and only orders one result list. `relevance` is the
+Dense and BM25 search are fused with RRF, then a cross-encoder reranker rereads the
+top `SEARCH_RERANK_CANDIDATES` together with the question and puts them in its order.
+`score` is the reranker's score (the RRF score when reranking is off) and only orders
+one result list. Hits scoring below `SEARCH_MIN_RERANK` are dropped. `relevance` is the
 cosine similarity between the question and the provision, so it means the same thing
-across questions; hits below `SEARCH_MIN_RELEVANCE` are dropped. An empty list means
-nothing in the rules is close enough, and the app should say so and point to the DSO.
-For an `as_of` search, a `superseded` hit was the rule on that date.
-Defaults: dense and BM25 search fused with RRF, rules in force today, proposed rules
+across questions; with reranking off, hits below `SEARCH_MIN_RELEVANCE` are dropped
+instead. An empty list means nothing in the rules is close enough, and the app should
+say so and point to the DSO. For an `as_of` search, a `superseded` hit was the rule on
+that date. Defaults: reranked hybrid search, rules in force today, proposed rules
 excluded. Options:
 
 | Option | Effect |
@@ -439,7 +442,7 @@ excluded. Options:
 | `visa_type` | Provisions for that visa plus provisions that apply to every visa. |
 | `sources` | Limit to `ecfr`, `federal_register`, `uscis_policy_manual`, `sevp`. |
 | `include_proposed` | Also return proposed rules. Their `status` is `proposed`; label them as not law. |
-| `min_relevance` | Override `SEARCH_MIN_RELEVANCE` for one call. |
+| `min_relevance` | Also drop hits whose cosine is below this, for one call. |
 
 ## How-to guides
 
@@ -639,7 +642,10 @@ Changing the model is a setting change plus a rebuild into a new collection vers
 | -------- | ------- | ---------------------- |
 | `SEARCH_K` | `3` | Hits returned when the caller gives no `k`; must be positive. |
 | `SEARCH_CANDIDATE_K` | `50` | Candidates each of dense and BM25 contributes before fusion. |
-| `SEARCH_MIN_RELEVANCE` | `0.65` | Drop hits whose cosine to the question is below this. Tuned on 8 CFR 214: correct hits scored 0.66 to 0.85, off-topic questions mostly below 0.65. Set 0 to turn it off. |
+| `SEARCH_MIN_RELEVANCE` | `0.65` | With reranking off: drop hits whose cosine to the question is below this. Tuned on 8 CFR 214: correct hits scored 0.66 to 0.85, off-topic questions mostly below 0.65. |
+| `SEARCH_RERANK_MODEL` | `Xenova/ms-marco-MiniLM-L-6-v2` | Cross-encoder (fastembed, ONNX, about 80 MB) that reorders the candidates. Empty turns reranking off. |
+| `SEARCH_RERANK_CANDIDATES` | `20` | Fused candidates the reranker reads (1 to 100). Each costs CPU: 20 add about 3 s per question on 2 CPUs. |
+| `SEARCH_MIN_RERANK` | `-1.0` | Drop hits the reranker scores below this (-20 to 20). Tuned on the test set: vague and off-topic questions scored -1.8 or lower. |
 
 The Qdrant payload indexes follow the handoff contract in `docs/ingestion.md`:
 `provision_id`, `source`, `authority`, `status`, `visa_types` (keyword) and

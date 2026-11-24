@@ -1,4 +1,5 @@
 import warnings
+from collections.abc import Sequence
 from datetime import date
 
 import pytest
@@ -220,3 +221,64 @@ def test_historical_search_links_to_the_text_on_that_date(searcher: Searcher) ->
 )
 def test_source_url_forms(provision_id: str, url: str | None) -> None:
     assert source_url(provision_id, "ecfr") == url
+
+
+class FakeReranker:
+    """Scores a passage by whether it contains a word; records what it was asked."""
+
+    def __init__(self, word: str) -> None:
+        self.word = word
+        self.calls: list[tuple[str, list[str]]] = []
+
+    def rerank(self, query: str, documents: Sequence[str]) -> list[float]:
+        self.calls.append((query, list(documents)))
+        return [5.0 if self.word in d else -5.0 for d in documents]
+
+
+def reranked(
+    searcher: Searcher,
+    reranker: FakeReranker,
+    min_rerank: float = -1.0,
+    rerank_candidates: int = 20,
+) -> Searcher:
+    settings = SearchSettings(
+        min_relevance=0.9,  # ignored once reranking
+        min_rerank=min_rerank,
+        rerank_candidates=rerank_candidates,
+    )
+    return Searcher(searcher.client, searcher.encoder, "provisions", settings, reranker)
+
+
+def test_reranker_decides_the_order(searcher: Searcher) -> None:
+    hits = reranked(searcher, FakeReranker("Exchange")).search("employment", k=1)
+    assert ids(hits) == [J1]
+    assert hits[0].score == 5.0  # the reranker's score replaces RRF's
+
+
+def test_reranker_cutoff_drops_weak_hits(searcher: Searcher) -> None:
+    hits = reranked(searcher, FakeReranker("Exchange")).search("employment", k=10)
+    assert ids(hits) == [J1]  # every other passage scored -5, below the -1 default
+
+
+def test_reranker_ignores_the_dense_cutoff(searcher: Searcher) -> None:
+    lenient = reranked(searcher, FakeReranker("Form I-983"), min_rerank=-10.0)
+    assert len(lenient.search("employment", k=10)) > 1
+
+
+def test_reranker_rereads_more_candidates_than_it_returns(searcher: Searcher) -> None:
+    fake = FakeReranker("Exchange")
+    reranked(searcher, fake, rerank_candidates=4).search("employment", k=1)
+    _, documents = fake.calls[0]
+    assert len(documents) == 4
+
+
+def test_reranker_reads_the_lead_in_with_the_text(searcher: Searcher) -> None:
+    fake = FakeReranker("Exchange")
+    reranked(searcher, fake).search("Form I-983", k=1)
+    query, documents = fake.calls[0]
+    assert query == "Form I-983"
+    assert "The student and employer must complete Form I-983." in documents
+
+
+def test_nothing_above_the_rerank_cutoff_returns_empty(searcher: Searcher) -> None:
+    assert reranked(searcher, FakeReranker("no such word")).search("employment") == []

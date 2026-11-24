@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from fastembed import SparseEmbedding, SparseTextEmbedding, TextEmbedding
+from fastembed.rerank.cross_encoder import TextCrossEncoder
 from numpy.typing import NDArray
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -63,6 +64,20 @@ class Encoder:
         dense = self._dense.embed([QUERY_PREFIX + text])  # fastembed won't add it
         sparse = self._sparse.query_embed(text)  # token ids; IDF applied by Qdrant
         return _pair(dense, sparse)[0]
+
+
+class CrossEncoderReranker:
+    """Score each (question, passage) pair together. Slow, so only for a short list."""
+
+    def __init__(self, model: str, cache_dir: Path | None = None) -> None:
+        """Load the cross-encoder, downloading it to the cache the first time."""
+        self.model = model
+        cache = str(cache_dir) if cache_dir else None
+        self._model = TextCrossEncoder(model, cache_dir=cache)
+
+    def rerank(self, query: str, documents: Sequence[str]) -> list[float]:
+        """One score per passage, higher is more relevant; scores are logits."""
+        return [float(s) for s in self._model.rerank(query, list(documents))]
 
 
 def _pair(

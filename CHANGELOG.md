@@ -4,6 +4,20 @@ What changed for users in each release. The version lives in `pyproject.toml`;
 each release is a Git tag (`v0.2.0`) and an image in the GitHub Container Registry
 under the same tag. How to cut and deploy one: [docs/deployment.md](docs/deployment.md#release-and-deploy).
 
+## 0.4.0
+
+### Changed
+- A cross-encoder reranker (MiniLM-L6) rereads the top 20 hybrid-search candidates
+  with the question and decides their order and relevance, instead of a single dense
+  cosine cutoff (#57, cause 3). On the 25-question test set, retrieval alone: the
+  right source in the top 3 went from 15 to 17 of 20, ranked first from 13 to 15,
+  and vague or off-topic questions declined from 3 to 4 of 4. "What does Form I-983
+  relate to?" is now answered instead of declined, and the M-1 work rule now comes
+  first for "Can an M-1 student work while studying?". Each answer takes about 3 s
+  longer on TEAM02's 2 CPUs.
+- New settings `SEARCH_RERANK_MODEL` (empty turns it off), `SEARCH_RERANK_CANDIDATES`
+  and `SEARCH_MIN_RERANK`. A hit's `score` is now the reranker's score.
+
 ## 0.3.0
 
 ### Added
