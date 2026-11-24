@@ -232,14 +232,37 @@ the public releases and need no token.
 3. On GitHub, **Releases → Draft a new release**. Create a new tag on `main` named
    exactly like the folder (`data-...`; restore only finds tags that start with
    `data-`), and use the same name as the title. Attach `catalog.sqlite`,
-   `data-files.tar.gz`, `qdrant.snapshot` and `manifest.json`. Untick **Set as latest
-   release**, so the latest release stays the app's version, then publish.
+   `data-files.tar.gz`, `qdrant.snapshot` and `manifest.json`. Under **Release label**
+   choose **Pre-release**, so the latest release stays the app's version (GitHub never
+   marks a pre-release as latest; restore still finds it), then publish.
 
 4. Check that the app sees it:
 
    ```bash
    docker compose run --rm jobs python -m myapp.backup list
    ```
+
+What you should see, from the first backup on TEAM02 (Nov 24, on v0.3.0). Step 1:
+
+```text
+INFO backed up provisions_v2 (3882 points)
+data-20261124T202116Z
+```
+
+`ls -la ~/backup-out/<tag>` then shows the four files, 43 MB in all:
+
+```text
+-rw-r--r-- 1 exouser exouser  4050944 Nov 24 20:21 catalog.sqlite
+-rw-r--r-- 1 exouser exouser 13590269 Nov 24 20:21 data-files.tar.gz
+-rw-r--r-- 1 exouser exouser      656 Nov 24 20:21 manifest.json
+-rw-r--r-- 1 exouser exouser 25363456 Nov 24 20:21 qdrant.snapshot
+```
+
+And step 4, after publishing:
+
+```text
+data-20261124T202116Z  43 MB  https://github.com/RAkupper/Assignment_for_6700/releases/tag/data-20261124T202116Z
+```
 
 Old backups are not deleted automatically. Delete them on the Releases page when
 there are more than a few.
@@ -341,8 +364,22 @@ gave back all 3,882 points, the alias, the catalog and the raw files, and a sear
 returned the same ranking as the original. Rebuilding the same data from eCFR took
 23 minutes: 170 s to fetch 64 snapshots, 12 s to parse, and 19.5 min to load on one CPU.
 
-These figures come from a copy of TEAM02's data, not TEAM02 itself. After the first
-backup and restore on TEAM02, paste their output here.
+What you should see, from the first drill on TEAM02 (Nov 24), restoring the backup
+above from GitHub onto empty volumes:
+
+```text
+INFO downloading data-20261124T202116Z
+INFO verified backup of provisions_v2 from 2026-11-24T20:21:22+00:00
+INFO loaded provisions_v1: 3882 points
+INFO restored the catalog: 3882 versions
+INFO alias provisions: None -> provisions_v1
+alias provisions -> provisions_v1
+provisions_v1: 3882 points  (live)
+```
+
+The collection comes back as `provisions_v1` because the drill's Qdrant was empty: a
+restore always loads into the next free version and moves the alias there. The last
+command removes the drill's volumes and leaves the live stack untouched.
 
 ## Fresh install
 
