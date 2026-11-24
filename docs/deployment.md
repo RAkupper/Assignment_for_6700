@@ -272,7 +272,8 @@ The loader builds a new collection
 and moves the `provisions` alias to it. To roll back, move the alias back:
 `docker compose run --rm jobs python -m myapp.vectordb.collection activate provisions_v1`.
 
-After every load that changes the data, take a backup: `scripts/backup.sh`.
+After every load that changes the data, take a backup: see
+[Back up and restore](runbook.md#back-up-and-restore).
 A full load measured Nov 6 took 19.5 min on one CPU, with `jobs` peaking at 2.3 GB
 of memory, so run it when nobody is testing.
 
@@ -291,11 +292,11 @@ Jetstream2 allocation and anyone's laptop. The repo is public and so is the data
 
 Measured Nov 6 on a copy of TEAM02's data (3,882 points): 43 MB per backup
 (`catalog.sqlite` 4.1 MB, `data-files.tar.gz` 13.6 MB, `qdrant.snapshot` 25.4 MB),
-made in 5 s. The newest 5 are kept; older releases and their tags are deleted after
-each upload.
+made in 5 s. With an upload token, the newest 5 are kept and older releases and their
+tags are deleted after each upload; backups uploaded by hand stay until someone
+deletes them on the Releases page.
 
-Commands to set up the token, take a backup, restore one and practice a restore
-are in the runbook: [Back up and restore](runbook.md#back-up-and-restore).
+Commands to take a backup, restore one and practice a restore are in the runbook: [Back up and restore](runbook.md#back-up-and-restore).
 
 ## HTTPS with Caddy (first time only)
 
@@ -476,7 +477,7 @@ from `.env`, then `git switch <branch> && docker compose up -d --build`. Run
 | Stop the stack (keeps the model volume) | `docker compose down` |
 | Disk usage | `docker system df`, `df -h /` and `df -h /media/volume/team02-data` |
 | Qdrant collections and point counts | `docker compose run --rm jobs python -m myapp.vectordb.collection status` |
-| Back up now, list backups | `scripts/backup.sh`, `docker compose run --rm jobs python -m myapp.backup list` |
+| Back up now, list backups | [Take one](runbook.md#take-one-manual-upload), `docker compose run --rm jobs python -m myapp.backup list` |
 
 Shelve TEAM02 in Exosphere when you are done, and say so in the group chat first so
 you don't cut off someone who is testing. Both containers use
@@ -542,7 +543,7 @@ After anything users noticed, write a short postmortem from
 | `https://<name>` doesn't load, `caddy` logs certificate errors | Port 80 or 443 is closed in the security group, or `APP_DOMAIN` doesn't resolve to the current public IP (it can change on unshelve). |
 | Everyone gets 429 at once | `FORWARDED_ALLOW_IPS` isn't `*`, so the app sees every request as coming from Caddy. |
 | `app` never starts, `qdrant` is unhealthy | `docker compose logs qdrant`. Usually `team02-data` is not mounted, so Docker's storage is missing; see the unshelve row above. |
-| `scripts/backup.sh` says GitHub answered 401 or 403 | `BACKUP_GITHUB_TOKEN` in `.env.backup` is missing, expired, or lacks Contents write on this repo. Make a new one as in [Token](runbook.md#token-once). |
+| `scripts/backup.sh` says GitHub answered 401 or 403 | `BACKUP_GITHUB_TOKEN` in `.env.backup` is missing, expired, or lacks Contents write on this repo. Make a new one as in [Automatic uploads](runbook.md#automatic-uploads-needs-a-token). |
 | `restore` says a file does not match the manifest | The download is damaged or the release was edited. Nothing was changed; try the previous backup with `scripts/restore.sh <older tag>`. |
 | `PermissionError` under `/data` or `/embed-cache` | The volume was filled by a root container, for example a manual copy. Fix it once: `docker compose run --rm --user 0 jobs chown -R 10001:10001 /data /embed-cache`. |
 

@@ -204,7 +204,51 @@ Each backup is a `data-<UTC time>` release in this repo, off Jetstream2. What it
 holds and how big it is: [Backups off Jetstream2](deployment.md#backups-off-jetstream2).
 Take one after every load that changes the data.
 
-### Token (once)
+### Take one (manual upload)
+
+We have no upload token, so a backup is made on TEAM02 and uploaded through GitHub's
+website. Anyone with push access to the repo can do this. Restoring and listing read
+the public releases and need no token.
+
+1. On TEAM02, make the backup and copy it out of the Docker volume:
+
+   ```bash
+   tag=data-$(date -u +%Y%m%dT%H%M%SZ)
+   docker compose run --rm -T jobs python -m myapp.backup create --out /data/backups/$tag
+   mkdir -p ~/backup-out
+   docker compose run --rm -T --no-deps --user 0 -v ~/backup-out:/out jobs \
+     sh -c "cp -r /data/backups/$tag /out/ && chown -R $(id -u):$(id -g) /out"
+   echo $tag
+   ```
+
+   Later backups leave `/data/backups/` out, so they don't nest.
+
+2. On your laptop, copy it down (use the tag the last command printed):
+
+   ```bash
+   scp -r exouser@team02.cis240466.projects.jetstream-cloud.org:~/backup-out/<tag> .
+   ```
+
+3. On GitHub, **Releases → Draft a new release**. Create a new tag on `main` named
+   exactly like the folder (`data-...`; restore only finds tags that start with
+   `data-`), and use the same name as the title. Attach `catalog.sqlite`,
+   `data-files.tar.gz`, `qdrant.snapshot` and `manifest.json`. Untick **Set as latest
+   release**, so the latest release stays the app's version, then publish.
+
+4. Check that the app sees it:
+
+   ```bash
+   docker compose run --rm jobs python -m myapp.backup list
+   ```
+
+Old backups are not deleted automatically. Delete them on the Releases page when
+there are more than a few.
+
+### Automatic uploads (needs a token)
+
+`scripts/backup.sh` does steps 1 to 4 in one command and keeps the newest 5, but it
+needs a token we don't have yet. Until there is one, don't install the timer below:
+it would fail every week.
 
 Uploading needs a fine-grained token. Fine-grained tokens only reach repos owned by
 the account that makes them, so the repo owner (RAkupper) creates it:
@@ -220,16 +264,10 @@ echo "BACKUP_GITHUB_TOKEN=<token>" > .env.backup && chmod 600 .env.backup
 Only the `jobs` container reads `.env.backup`. The app, which faces the internet, never
 holds the token. Restoring and listing need no token.
 
-### Take one
-
-```bash
-scripts/backup.sh
-docker compose run --rm jobs python -m myapp.backup list
-```
-
-It creates a draft release, uploads the four files, and only then publishes it, so a
-failed upload never looks like a backup. A systemd timer also runs it every week;
-`Persistent=true` catches up after a shelve. Install it once, on the instance:
+Then a backup is one command: `scripts/backup.sh`. It creates a draft release,
+uploads the four files, and only then publishes it, so a failed upload never looks
+like a backup. A systemd timer can run it every week; `Persistent=true` catches up
+after a shelve. Install it once, on the instance:
 
 `/etc/systemd/system/team02-backup.service`:
 
