@@ -2,6 +2,8 @@
 
 How the service runs on our team instance, how to start and check it, and what to
 do when something breaks. The stack is defined in [`compose.yml`](../compose.yml).
+For the exact commands of each routine task and their expected output, see the
+[runbook](runbook.md).
 
 ## What runs where
 
