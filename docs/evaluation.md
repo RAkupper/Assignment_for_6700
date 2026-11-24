@@ -42,6 +42,41 @@ when the app answers 429 (rate limit) with `Retry-After`.
 The report also shows whether the correct source came first, and how many answers
 had inline `[n]` citations. Neither is required for a pass.
 
+## Results
+
+Full runs on TEAM02 through `scripts/deploy.sh`, with the same 25 questions and the
+same data (8 CFR 214, 3,882 provision versions).
+
+| Metric | v0.3.0 (Nov 24) | v0.4.0 (Nov 24) |
+| --- | --- | --- |
+| All cases passed | 19/25 | 22/25 |
+| Correct source retrieved | 16/20 | 18/20 |
+| Correct source ranked first | 13/20 | 16/20 |
+| Answers that passed | 16/21 | 18/21 |
+| Declined when it should | 3/4 | 4/4 |
+| Answers with inline citations | 0/19 | 0/20 |
+| Median seconds per question | 18.4 | 13.6 |
+
+v0.4.0 added the cross-encoder reranker (#57, cause 3). Three cases flipped to pass:
+
+- `form-i983`: BM25 already found the training-plan rules, but their dense cosine
+  (0.58) was under the 0.65 cutoff, so the app declined. The reranker scores them
+  first.
+- `m1-work`: the M-1 employment rule was 5th, outside the top 3. It is now first.
+- `too-vague`: "Program limitations?" now scores below the reranker's cutoff and is
+  declined instead of answered with an unrelated rule.
+
+Still failing in v0.4.0, and why:
+
+| Case | Cause | Fix |
+| --- | --- | --- |
+| `opt-length` | The 12-month limit is inside the long (f)(10) paragraph, which ranks 48th on dense search and never reaches the candidates. | Split long provisions or search pieces and return the section (#57, cause 1). |
+| `f4-stem-opt` | The model answers yes for F-4, a class that does not exist. The visa type never reaches the prompt. | Put the visa type in the prompt and flag a different visa named in the question (#57, cause 4). |
+| `degree-years` | The tester's wording ("how many years can I work on my Bachelor's") matches no provision well; every candidate scores about -6. | Declining is defensible. A clarifying question would help (deferred in #57). |
+
+No answer has inline `[n]` citations yet: the sources are listed, but the model does
+not label sentences (#57, cause 4).
+
 ## Add a question
 
 Add an object to `questions.json`:
