@@ -4,6 +4,20 @@ What changed for users in each release. The version lives in `pyproject.toml`;
 each release is a Git tag (`v0.2.0`) and an image in the GitHub Container Registry
 under the same tag. How to cut and deploy one: [docs/deployment.md](docs/deployment.md#release-and-deploy).
 
+## 0.3.0
+
+### Added
+- Backups of the catalog, the other files in `/data` and a Qdrant snapshot, checked
+  against a manifest of sha256 hashes and counts. Each one is uploaded as a
+  `data-<UTC time>` release in this repo, off Jetstream2 (#55).
+- A verified restore: nothing is replaced until every file, the catalog and the
+  snapshot's point count match the manifest, and any failure puts everything back
+  (#55).
+
+### Documentation
+- The runbook covers taking a backup, uploading it by hand while there is no token,
+  restoring it, and a restore drill on empty volumes (#55).
+
 ## 0.2.1 (2026-11-24)
 
 ### Changed
