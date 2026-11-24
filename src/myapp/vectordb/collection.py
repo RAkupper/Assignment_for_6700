@@ -28,6 +28,8 @@ PAYLOAD_INDEXES: dict[str, models.PayloadSchemaType] = {  # handoff contract
 
 
 class QdrantSettings(BaseSettings):
+    """Where Qdrant is and which alias the app queries, from QDRANT_* variables."""
+
     model_config = SettingsConfigDict(
         env_prefix="QDRANT_",
         env_file=".env",
@@ -53,6 +55,7 @@ def get_client(settings: QdrantSettings) -> QdrantClient:
 
 
 def versioned_name(alias: str, version: int) -> str:
+    """The collection name for one version: provisions_v3."""
     return f"{alias}_v{version}"
 
 
@@ -64,6 +67,7 @@ def versions(client: QdrantClient, alias: str) -> list[int]:
 
 
 def next_version(client: QdrantClient, alias: str) -> int:
+    """One past the highest existing version, or 1 when there is none."""
     return max(versions(client, alias), default=0) + 1
 
 
@@ -85,6 +89,7 @@ def create_collection(client: QdrantClient, name: str, dense_dim: int) -> None:
 
 
 def dense_size(client: QdrantClient, name: str) -> int:
+    """The dense vector size a collection was built with."""
     vectors = client.get_collection(name).config.params.vectors
     assert isinstance(vectors, dict)  # always named vectors here
     return vectors[DENSE].size
@@ -117,6 +122,7 @@ def point_alias(client: QdrantClient, alias: str, name: str) -> str | None:
 
 
 def status(client: QdrantClient, alias: str) -> list[str]:
+    """Lines showing where the alias points and each version's point count."""
     live = current_target(client, alias)
     lines = [f"alias {alias} -> {live}"]
     for v in versions(client, alias):
@@ -127,6 +133,7 @@ def status(client: QdrantClient, alias: str) -> list[str]:
 
 
 def main(argv: Sequence[str] | None = None) -> None:
+    """Print the status, or move the alias to another collection."""
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("status", help="show the live collection and every version")

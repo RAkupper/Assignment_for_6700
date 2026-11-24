@@ -17,6 +17,8 @@ QUERY_PREFIX = (  # BGE is asymmetric: queries only, never documents
 
 
 class EmbeddingSettings(BaseSettings):
+    """Which models to load and where to cache them, from EMBED_* variables."""
+
     model_config = SettingsConfigDict(
         env_prefix="EMBED_",
         env_file=".env",
@@ -32,6 +34,8 @@ class EmbeddingSettings(BaseSettings):
 
 @dataclass(frozen=True)
 class Encoded:
+    """One text as a dense BGE vector and a sparse BM25 vector."""
+
     dense: list[float]
     sparse: models.SparseVector
 
@@ -40,6 +44,7 @@ class Encoder:
     """Load once per process; encoding is CPU-bound, so call it off the event loop."""
 
     def __init__(self, settings: EmbeddingSettings) -> None:
+        """Load both models, downloading them to the cache the first time."""
         cache = str(settings.cache_dir) if settings.cache_dir else None
         self.dense_model = settings.dense_model
         self.dim = TextEmbedding.get_embedding_size(settings.dense_model)
@@ -48,11 +53,13 @@ class Encoder:
         self._sparse = SparseTextEmbedding(settings.sparse_model, cache_dir=cache)
 
     def embed_documents(self, texts: Sequence[str]) -> list[Encoded]:
+        """Encode provision texts in batches, without the query prefix."""
         dense = self._dense.embed(texts, batch_size=self.batch_size)  # no prefix
         sparse = self._sparse.embed(texts, batch_size=self.batch_size)  # BM25 tf
         return _pair(dense, sparse)
 
     def embed_query(self, text: str) -> Encoded:
+        """Encode a question, with the BGE query prefix on the dense side."""
         dense = self._dense.embed([QUERY_PREFIX + text])  # fastembed won't add it
         sparse = self._sparse.query_embed(text)  # token ids; IDF applied by Qdrant
         return _pair(dense, sparse)[0]

@@ -27,6 +27,7 @@ class PoliteClient:
         clock: Callable[[], float] = time.monotonic,
         jitter: Callable[[float, float], float] = random.uniform,
     ) -> None:
+        """Read limits from settings; the other arguments are test hooks."""
         self.interval = settings.min_request_interval_s
         self.retries = settings.max_retries
         self._sleep = sleep
@@ -48,6 +49,7 @@ class PoliteClient:
         self._last[host] = self._clock()
 
     def get(self, url: str) -> httpx2.Response:
+        """GET after waiting the host's turn; retry 429, 5xx and network errors."""
         host = urlsplit(url).netloc
         for attempt in range(self.retries + 1):
             self._wait_turn(host)
@@ -68,6 +70,7 @@ class PoliteClient:
         return half + self._jitter(0.0, half)
 
     def close(self) -> None:
+        """Close the underlying connection pool."""
         self._http.close()
 
 

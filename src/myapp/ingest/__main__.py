@@ -21,6 +21,7 @@ from myapp.ingest.versions import parse, reset
 
 
 def main(argv: Sequence[str] | None = None) -> None:
+    """Run fetch or parse for each requested eCFR part, or every configured one."""
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
     fetch_cmd = sub.add_parser("fetch", help="download and store eCFR snapshots")

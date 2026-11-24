@@ -1,3 +1,5 @@
+"""Validated shapes for raw responses and the records parsed from them."""
+
 from datetime import date
 from hashlib import sha256
 from typing import Final, Literal, Self
@@ -56,6 +58,8 @@ AUTHORITY_BY_SOURCE: Final[dict[SourceName, Authority]] = {  # docs/ingestion.md
 
 
 class RawDocument(BaseModel):
+    """One response exactly as fetched, kept whether or not it is accepted."""
+
     model_config = ConfigDict(frozen=True)
 
     source: SourceName
@@ -115,4 +119,5 @@ class Record(BaseModel):
     @computed_field  # type: ignore[prop-decorator]
     @property
     def content_hash(self) -> str:
+        """SHA-256 of the text; a provision gets a new version when it changes."""
         return sha256(self.text.encode()).hexdigest()  # new version when it changes

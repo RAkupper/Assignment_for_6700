@@ -21,9 +21,12 @@ log = logging.getLogger(__name__)
 
 
 class Parser(Protocol):
+    """The part of a Source that the parse step needs."""
+
     name: SourceName
 
-    def parse(self, raw: RawDocument) -> Iterator[Record]: ...
+    def parse(self, raw: RawDocument) -> Iterator[Record]:
+        """Turn one stored snapshot into records. No network."""
 
 
 class OutOfOrderError(RuntimeError):
@@ -32,6 +35,8 @@ class OutOfOrderError(RuntimeError):
 
 @dataclass(frozen=True)
 class ParseSummary:
+    """Counts for one parse run: snapshots applied and provisions changed."""
+
     run_id: int
     snapshots: int
     added: int
@@ -41,6 +46,8 @@ class ParseSummary:
 
 @dataclass(frozen=True)
 class Snapshot:
+    """A stored response waiting to be parsed, with the day it represents."""
+
     fetch_id: int
     day: str
     raw: RawDocument
