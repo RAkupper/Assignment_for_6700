@@ -41,7 +41,7 @@ clear message instead of a page that hangs.
 | Caddy waiting for the app | 200 s (connect 5 s) | 504, "The answer took too long" | `Caddyfile` |
 | Waiting for one of 2 model slots | 60 s | the passages, status `model_unavailable` | `GENERATION_QUEUE_TIMEOUT_S` |
 | Model call, retries included | 120 s (connect 5 s) | the passages, status `model_unavailable` | `LLM_TIMEOUT_S`, `LLM_CONNECT_TIMEOUT_S` |
-| Qdrant search | 5 s, the client library's default | 503 with `Retry-After` | not set explicitly yet |
+| Qdrant search or readiness check | 5 s (60 s in the jobs container) | 503 with `Retry-After` | `QDRANT_TIMEOUT_S` (#66) |
 | eCFR download (jobs only) | 30 s per request, retried with backoff | the job fails and can be rerun | `INGEST_REQUEST_TIMEOUT_S` |
 
 The slowest normal answer takes about 48 s (two questions at once on two CPUs), so

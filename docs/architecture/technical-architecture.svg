@@ -18,7 +18,7 @@
 <rect x="14" y="214" width="196" height="60" rx="6" fill="#FFFFFF" stroke="#999999" stroke-width="1.2" stroke-dasharray="6 4"/>
 <text x="112.0" y="239.8" font-size="15" fill="#1A1A1A" text-anchor="middle" font-weight="bold">Let's Encrypt</text>
 <text x="112.0" y="257.7" font-size="13" fill="#1A1A1A" text-anchor="middle">TLS certificate (ACME)</text>
-<rect x="14" y="300" width="196" height="236" rx="6" fill="#FFF8EE" stroke="#E0A55A" stroke-width="1.2"/>
+<rect x="14" y="300" width="196" height="220" rx="6" fill="#FFF8EE" stroke="#E0A55A" stroke-width="1.2"/>
 <text x="22.0" y="320.2" font-size="15" fill="#1A1A1A" text-anchor="start" font-weight="bold">Time limits, outside in</text>
 <text x="22.0" y="338.2" font-size="13" fill="#1A1A1A" text-anchor="start">page: 210 s</text>
 <text x="22.0" y="355.3" font-size="13" fill="#1A1A1A" text-anchor="start">Caddy → app: 200 s</text>
@@ -26,12 +26,11 @@
 <text x="22.0" y="389.6" font-size="13" fill="#1A1A1A" text-anchor="start">model slot queue: 60 s</text>
 <text x="22.0" y="406.8" font-size="13" fill="#1A1A1A" text-anchor="start">model call: 120 s,</text>
 <text x="34.0" y="424.0" font-size="13" fill="#1A1A1A" text-anchor="start">retries included</text>
-<text x="22.0" y="441.1" font-size="13" fill="#1A1A1A" text-anchor="start">Qdrant: client</text>
-<text x="34.0" y="458.3" font-size="13" fill="#1A1A1A" text-anchor="start">default (5 s)</text>
-<text x="22.0" y="475.4" font-size="13" fill="#1A1A1A" text-anchor="start">eCFR fetch: 30 s,</text>
-<text x="34.0" y="492.6" font-size="13" fill="#1A1A1A" text-anchor="start">retried with backoff</text>
-<text x="22.0" y="509.8" font-size="13" fill="#1A1A1A" text-anchor="start">Each layer gives up</text>
-<text x="34.0" y="526.9" font-size="13" fill="#1A1A1A" text-anchor="start">after the one inside it</text>
+<text x="22.0" y="441.1" font-size="13" fill="#1A1A1A" text-anchor="start">Qdrant: 5 s (jobs 60 s)</text>
+<text x="22.0" y="458.3" font-size="13" fill="#1A1A1A" text-anchor="start">eCFR fetch: 30 s,</text>
+<text x="34.0" y="475.4" font-size="13" fill="#1A1A1A" text-anchor="start">retried with backoff</text>
+<text x="22.0" y="492.6" font-size="13" fill="#1A1A1A" text-anchor="start">Each layer gives up</text>
+<text x="34.0" y="509.8" font-size="13" fill="#1A1A1A" text-anchor="start">after the one inside it</text>
 <rect x="14" y="640" width="196" height="100" rx="6" fill="#FFFFFF" stroke="#999999" stroke-width="1.2" stroke-dasharray="6 4"/>
 <text x="112.0" y="677.2" font-size="15" fill="#1A1A1A" text-anchor="middle" font-weight="bold">eCFR API</text>
 <text x="112.0" y="695.1" font-size="13" fill="#1A1A1A" text-anchor="middle">8 CFR 214 and</text>
