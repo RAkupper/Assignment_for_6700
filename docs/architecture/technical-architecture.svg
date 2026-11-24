@@ -1,0 +1,202 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="1040" viewBox="0 0 1440 1040" font-family="Helvetica, Arial, sans-serif">
+<defs>
+<marker id="m2F6FDE" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2F6FDE"/></marker>
+<marker id="m888888" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#888888"/></marker>
+<marker id="mD9730D" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#D9730D"/></marker>
+</defs>
+<rect x="0" y="0" width="1440" height="1040" fill="#FFFFFF"/>
+<rect x="1185" y="19" width="46" height="19" rx="6" fill="#E3F4E8" stroke="#3C9A5F" stroke-width="1"/>
+<text x="1208.0" y="31.8" font-size="11.5" fill="#1F6B3A" text-anchor="middle" font-weight="bold">built</text>
+<rect x="1239" y="19" width="82" height="19" rx="6" fill="#FFF1D6" stroke="#D9930D" stroke-width="1"/>
+<text x="1280.0" y="31.8" font-size="11.5" fill="#7A4F00" text-anchor="middle" font-weight="bold">in progress</text>
+<rect x="1329" y="19" width="66" height="19" rx="6" fill="#EEEEEE" stroke="#9A9A9A" stroke-width="1" stroke-dasharray="6 4"/>
+<text x="1362.0" y="31.8" font-size="11.5" fill="#4A4A4A" text-anchor="middle" font-weight="bold">not built</text>
+<rect x="14" y="112" width="196" height="84" rx="6" fill="#FFFFFF" stroke="#777777" stroke-width="1.2"/>
+<text x="112.0" y="140.2" font-size="16" fill="#1A1A1A" text-anchor="middle" font-weight="bold">User's browser</text>
+<text x="112.0" y="159.4" font-size="14" fill="#1A1A1A" text-anchor="middle">student or DSO</text>
+<text x="112.0" y="177.9" font-size="14" fill="#1A1A1A" text-anchor="middle">gives up after 210 s</text>
+<rect x="14" y="214" width="196" height="60" rx="6" fill="#FFFFFF" stroke="#999999" stroke-width="1.2" stroke-dasharray="6 4"/>
+<text x="112.0" y="239.8" font-size="15" fill="#1A1A1A" text-anchor="middle" font-weight="bold">Let's Encrypt</text>
+<text x="112.0" y="257.7" font-size="13" fill="#1A1A1A" text-anchor="middle">TLS certificate (ACME)</text>
+<rect x="14" y="300" width="196" height="236" rx="6" fill="#FFF8EE" stroke="#E0A55A" stroke-width="1.2"/>
+<text x="22.0" y="320.2" font-size="15" fill="#1A1A1A" text-anchor="start" font-weight="bold">Time limits, outside in</text>
+<text x="22.0" y="338.2" font-size="13" fill="#1A1A1A" text-anchor="start">page: 210 s</text>
+<text x="22.0" y="355.3" font-size="13" fill="#1A1A1A" text-anchor="start">Caddy → app: 200 s</text>
+<text x="34.0" y="372.5" font-size="13" fill="#1A1A1A" text-anchor="start">(connect 5 s)</text>
+<text x="22.0" y="389.6" font-size="13" fill="#1A1A1A" text-anchor="start">model slot queue: 60 s</text>
+<text x="22.0" y="406.8" font-size="13" fill="#1A1A1A" text-anchor="start">model call: 120 s,</text>
+<text x="34.0" y="424.0" font-size="13" fill="#1A1A1A" text-anchor="start">retries included</text>
+<text x="22.0" y="441.1" font-size="13" fill="#1A1A1A" text-anchor="start">Qdrant: client</text>
+<text x="34.0" y="458.3" font-size="13" fill="#1A1A1A" text-anchor="start">default (5 s)</text>
+<text x="22.0" y="475.4" font-size="13" fill="#1A1A1A" text-anchor="start">eCFR fetch: 30 s,</text>
+<text x="34.0" y="492.6" font-size="13" fill="#1A1A1A" text-anchor="start">retried with backoff</text>
+<text x="22.0" y="509.8" font-size="13" fill="#1A1A1A" text-anchor="start">Each layer gives up</text>
+<text x="34.0" y="526.9" font-size="13" fill="#1A1A1A" text-anchor="start">after the one inside it</text>
+<rect x="14" y="640" width="196" height="100" rx="6" fill="#FFFFFF" stroke="#999999" stroke-width="1.2" stroke-dasharray="6 4"/>
+<text x="112.0" y="677.2" font-size="15" fill="#1A1A1A" text-anchor="middle" font-weight="bold">eCFR API</text>
+<text x="112.0" y="695.1" font-size="13" fill="#1A1A1A" text-anchor="middle">8 CFR 214 and</text>
+<text x="112.0" y="712.2" font-size="13" fill="#1A1A1A" text-anchor="middle">every amendment</text>
+<rect x="236" y="60" width="948" height="740" rx="6" fill="#FBFBFB" stroke="#777777" stroke-width="1.2" stroke-dasharray="6 4"/>
+<text x="244.0" y="82.2" font-size="17" fill="#1A1A1A" text-anchor="start" font-weight="bold">Jetstream2 instance TEAM02 (Docker Compose)</text>
+<text x="244.0" y="100.8" font-size="13" fill="#555555" text-anchor="start" font-style="italic">m3.small: 2 vCPU, 6 GB RAM · 40 GB volume · team02.cis240466.projects.jetstream-cloud.org</text>
+<rect x="276" y="112" width="468" height="76" rx="6" fill="#FDEFF3" stroke="#D98BA0" stroke-width="1.2"/>
+<text x="284.0" y="132.2" font-size="15" fill="#1A1A1A" text-anchor="start" font-weight="bold">caddy: HTTPS reverse proxy</text>
+<text x="284.0" y="150.6" font-size="13.5" fill="#1A1A1A" text-anchor="start">ports 80 and 443, the only public ports</text>
+<text x="284.0" y="168.4" font-size="13.5" fill="#1A1A1A" text-anchor="start">http → https · waits ≤ 200 s for the app</text>
+<rect x="691" y="119" width="46" height="19" rx="6" fill="#E3F4E8" stroke="#3C9A5F" stroke-width="1"/>
+<text x="714.0" y="131.8" font-size="11.5" fill="#1F6B3A" text-anchor="middle" font-weight="bold">built</text>
+<rect x="214" y="136" width="44" height="26" rx="6" fill="#2F6FDE" stroke="#2F6FDE" stroke-width="1.2"/>
+<text x="236.0" y="152.8" font-size="13" fill="#FFFFFF" text-anchor="middle" font-weight="bold">443</text>
+<rect x="276" y="210" width="468" height="384" rx="6" fill="#EAF1FD" stroke="#7FA4E6" stroke-width="1.2"/>
+<text x="284.0" y="232.2" font-size="17" fill="#1A1A1A" text-anchor="start" font-weight="bold">app container: FastAPI</text>
+<text x="284.0" y="250.8" font-size="13" fill="#555555" text-anchor="start" font-style="italic">127.0.0.1:8000 · non-root · image from GHCR</text>
+<rect x="290" y="262" width="214" height="80" rx="6" fill="#FFFFFF" stroke="#B7C9EC" stroke-width="1.2"/>
+<text x="298.0" y="282.2" font-size="15" fill="#1A1A1A" text-anchor="start" font-weight="bold">Web UI</text>
+<text x="298.0" y="300.6" font-size="13.5" fill="#1A1A1A" text-anchor="start">HTML + JS at /</text>
+<text x="298.0" y="318.4" font-size="13.5" fill="#1A1A1A" text-anchor="start">plain message per failure</text>
+<rect x="451" y="269" width="46" height="19" rx="6" fill="#E3F4E8" stroke="#3C9A5F" stroke-width="1"/>
+<text x="474.0" y="281.8" font-size="11.5" fill="#1F6B3A" text-anchor="middle" font-weight="bold">built</text>
+<rect x="516" y="262" width="214" height="80" rx="6" fill="#FFFFFF" stroke="#B7C9EC" stroke-width="1.2"/>
+<text x="524.0" y="282.2" font-size="15" fill="#1A1A1A" text-anchor="start" font-weight="bold">API routes</text>
+<text x="524.0" y="300.6" font-size="13.5" fill="#1A1A1A" text-anchor="start">/ask /retrieve /ready …</text>
+<text x="524.0" y="318.4" font-size="13.5" fill="#1A1A1A" text-anchor="start">429 limits · admin key</text>
+<rect x="677" y="269" width="46" height="19" rx="6" fill="#E3F4E8" stroke="#3C9A5F" stroke-width="1"/>
+<text x="700.0" y="281.8" font-size="11.5" fill="#1F6B3A" text-anchor="middle" font-weight="bold">built</text>
+<rect x="290" y="354" width="440" height="170" rx="6" fill="#F5F8FE" stroke="#B7C9EC" stroke-width="1.2"/>
+<text x="298.0" y="374.2" font-size="15" fill="#1A1A1A" text-anchor="start" font-weight="bold">RAG pipeline (in-process)</text>
+<rect x="302" y="382" width="416" height="44" rx="6" fill="#FFFFFF" stroke="#B7C9EC" stroke-width="1.2"/>
+<text x="310.0" y="401.8" font-size="14.5" fill="#1A1A1A" text-anchor="start" font-weight="bold">Encoders (fastembed)</text>
+<text x="310.0" y="419.5" font-size="13" fill="#1A1A1A" text-anchor="start">BGE dense + BM25 sparse, on CPU</text>
+<rect x="665" y="389" width="46" height="19" rx="6" fill="#E3F4E8" stroke="#3C9A5F" stroke-width="1"/>
+<text x="688.0" y="401.8" font-size="11.5" fill="#1F6B3A" text-anchor="middle" font-weight="bold">built</text>
+<rect x="302" y="428" width="416" height="44" rx="6" fill="#FFFFFF" stroke="#B7C9EC" stroke-width="1.2"/>
+<text x="310.0" y="447.8" font-size="14.5" fill="#1A1A1A" text-anchor="start" font-weight="bold">Retriever</text>
+<text x="310.0" y="465.5" font-size="13" fill="#1A1A1A" text-anchor="start">hybrid + RRF; visa, date filters; cosine gate</text>
+<rect x="665" y="435" width="46" height="19" rx="6" fill="#E3F4E8" stroke="#3C9A5F" stroke-width="1"/>
+<text x="688.0" y="447.8" font-size="11.5" fill="#1F6B3A" text-anchor="middle" font-weight="bold">built</text>
+<rect x="302" y="474" width="416" height="44" rx="6" fill="#FFFFFF" stroke="#B7C9EC" stroke-width="1.2"/>
+<text x="310.0" y="493.8" font-size="14.5" fill="#1A1A1A" text-anchor="start" font-weight="bold">Prompt, generate, fallback</text>
+<text x="310.0" y="511.5" font-size="13" fill="#1A1A1A" text-anchor="start">120 s with retries; else passages only</text>
+<rect x="665" y="481" width="46" height="19" rx="6" fill="#E3F4E8" stroke="#3C9A5F" stroke-width="1"/>
+<text x="688.0" y="493.8" font-size="11.5" fill="#1F6B3A" text-anchor="middle" font-weight="bold">built</text>
+<rect x="290" y="534" width="214" height="52" rx="6" fill="#FFFFFF" stroke="#B7C9EC" stroke-width="1.2"/>
+<text x="298.0" y="554.2" font-size="15" fill="#1A1A1A" text-anchor="start" font-weight="bold">Answer slots</text>
+<text x="298.0" y="572.6" font-size="13.5" fill="#1A1A1A" text-anchor="start">2 at a time; wait ≤ 60 s</text>
+<rect x="451" y="541" width="46" height="19" rx="6" fill="#E3F4E8" stroke="#3C9A5F" stroke-width="1"/>
+<text x="474.0" y="553.8" font-size="11.5" fill="#1F6B3A" text-anchor="middle" font-weight="bold">built</text>
+<rect x="516" y="534" width="214" height="52" rx="6" fill="#FFFFFF" stroke="#B7C9EC" stroke-width="1.2"/>
+<text x="524.0" y="554.2" font-size="15" fill="#1A1A1A" text-anchor="start" font-weight="bold">Logs, metrics</text>
+<text x="524.0" y="572.6" font-size="13.5" fill="#1A1A1A" text-anchor="start">JSON, request id</text>
+<rect x="641" y="541" width="82" height="19" rx="6" fill="#FFF1D6" stroke="#D9930D" stroke-width="1"/>
+<text x="682.0" y="553.8" font-size="11.5" fill="#7A4F00" text-anchor="middle" font-weight="bold">in progress</text>
+<rect x="276" y="618" width="468" height="164" rx="6" fill="#FFF3E3" stroke="#E0A55A" stroke-width="1.2"/>
+<text x="284.0" y="640.1" font-size="17" fill="#1A1A1A" text-anchor="start" font-weight="bold">one-off jobs (same image as app)</text>
+<text x="284.0" y="658.8" font-size="13" fill="#555555" text-anchor="start" font-style="italic">docker compose run --rm jobs … (1 CPU)</text>
+<text x="284.0" y="676.4" font-size="13.5" fill="#1A1A1A" text-anchor="start">ingest: eCFR → raw/ → catalog.sqlite</text>
+<text x="284.0" y="694.2" font-size="13.5" fill="#1A1A1A" text-anchor="start">loader: embed → new collection → alias</text>
+<text x="284.0" y="712.1" font-size="13.5" fill="#1A1A1A" text-anchor="start">evaluation: the 25 known questions</text>
+<text x="284.0" y="729.9" font-size="13.5" fill="#1A1A1A" text-anchor="start">backup, restore: GitHub release (#55)</text>
+<rect x="691" y="625" width="46" height="19" rx="6" fill="#E3F4E8" stroke="#3C9A5F" stroke-width="1"/>
+<text x="714.0" y="637.8" font-size="11.5" fill="#1F6B3A" text-anchor="middle" font-weight="bold">built</text>
+<rect x="800" y="112" width="352" height="92" rx="6" fill="#F3ECFC" stroke="#A98BD6" stroke-width="1.2"/>
+<text x="808.0" y="132.2" font-size="15" fill="#1A1A1A" text-anchor="start" font-weight="bold">llm: llama.cpp</text>
+<text x="808.0" y="150.6" font-size="13.5" fill="#1A1A1A" text-anchor="start">Qwen2.5-1.5B-Instruct (Q4_K_M)</text>
+<text x="808.0" y="168.4" font-size="13.5" fill="#1A1A1A" text-anchor="start">port 8080, internal · 2 slots · 3 GB cap</text>
+<rect x="1099" y="119" width="46" height="19" rx="6" fill="#E3F4E8" stroke="#3C9A5F" stroke-width="1"/>
+<text x="1122.0" y="131.8" font-size="11.5" fill="#1F6B3A" text-anchor="middle" font-weight="bold">built</text>
+<path d="M800,230 A176.0,8 0 0 1 1152,230 L1152,276 A176.0,8 0 0 1 800,276 Z" fill="#EFEFEF" stroke="#9A9A9A" stroke-width="1.2"/>
+<ellipse cx="976.0" cy="230" rx="176.0" ry="8" fill="#EFEFEF" stroke="#9A9A9A" stroke-width="1.2"/>
+<text x="976.0" y="252.4" font-size="15" fill="#1A1A1A" text-anchor="middle" font-weight="bold">llm-models volume</text>
+<text x="976.0" y="270.8" font-size="13.5" fill="#1A1A1A" text-anchor="middle">Qwen weights (1.1 GB)</text>
+<rect x="800" y="304" width="352" height="92" rx="6" fill="#E9F6EF" stroke="#6DB38A" stroke-width="1.2"/>
+<text x="808.0" y="324.2" font-size="15" fill="#1A1A1A" text-anchor="start" font-weight="bold">qdrant: Qdrant v1.19</text>
+<text x="808.0" y="342.6" font-size="13.5" fill="#1A1A1A" text-anchor="start">port 6333, internal (not published)</text>
+<text x="808.0" y="360.4" font-size="13.5" fill="#1A1A1A" text-anchor="start">provisions_vN behind an alias</text>
+<rect x="1099" y="311" width="46" height="19" rx="6" fill="#E3F4E8" stroke="#3C9A5F" stroke-width="1"/>
+<text x="1122.0" y="323.8" font-size="11.5" fill="#1F6B3A" text-anchor="middle" font-weight="bold">built</text>
+<path d="M800,422 A176.0,8 0 0 1 1152,422 L1152,522 A176.0,8 0 0 1 800,522 Z" fill="#EFEFEF" stroke="#9A9A9A" stroke-width="1.2"/>
+<ellipse cx="976.0" cy="422" rx="176.0" ry="8" fill="#EFEFEF" stroke="#9A9A9A" stroke-width="1.2"/>
+<text x="976.0" y="453.6" font-size="15" fill="#1A1A1A" text-anchor="middle" font-weight="bold">Named volumes (on the 40 GB volume)</text>
+<text x="976.0" y="472.0" font-size="13.5" fill="#1A1A1A" text-anchor="middle">catalog-data · qdrant-storage</text>
+<text x="976.0" y="489.8" font-size="13.5" fill="#1A1A1A" text-anchor="middle">qdrant-snapshots · embed-cache</text>
+<text x="976.0" y="507.6" font-size="13.5" fill="#1A1A1A" text-anchor="middle">caddy-data · llm-models</text>
+<rect x="800" y="548" width="352" height="66" rx="6" fill="#FFFFFF" stroke="#9A9A9A" stroke-width="1.2"/>
+<text x="808.0" y="568.2" font-size="15" fill="#1A1A1A" text-anchor="start" font-weight="bold">prometheus + grafana</text>
+<text x="808.0" y="586.6" font-size="13.5" fill="#1A1A1A" text-anchor="start">scrape /metrics; dashboards; not public</text>
+<rect x="1063" y="555" width="82" height="19" rx="6" fill="#FFF1D6" stroke="#D9930D" stroke-width="1"/>
+<text x="1104.0" y="567.8" font-size="11.5" fill="#7A4F00" text-anchor="middle" font-weight="bold">in progress</text>
+<rect x="800" y="632" width="352" height="150" rx="6" fill="#EEF7F1" stroke="#93C4A2" stroke-width="1.2"/>
+<text x="808.0" y="652.2" font-size="15" fill="#1A1A1A" text-anchor="start" font-weight="bold">scripts/deploy.sh &lt;version&gt;</text>
+<text x="808.0" y="670.6" font-size="13.5" fill="#1A1A1A" text-anchor="start">checks out the tag, pulls the image,</text>
+<text x="808.0" y="688.4" font-size="13.5" fill="#1A1A1A" text-anchor="start">pins its digest in .env (APP_IMAGE),</text>
+<text x="808.0" y="706.3" font-size="13.5" fill="#1A1A1A" text-anchor="start">migrates, starts, waits for /ready</text>
+<text x="820.0" y="724.1" font-size="13.5" fill="#1A1A1A" text-anchor="start">(2 min), checks the version,</text>
+<text x="808.0" y="741.9" font-size="13.5" fill="#1A1A1A" text-anchor="start">runs the 25 questions, writes</text>
+<text x="820.0" y="759.7" font-size="13.5" fill="#1A1A1A" text-anchor="start">deploy.log · rollback = older tag</text>
+<rect x="1099" y="639" width="46" height="19" rx="6" fill="#E3F4E8" stroke="#3C9A5F" stroke-width="1"/>
+<text x="1122.0" y="651.8" font-size="11.5" fill="#1F6B3A" text-anchor="middle" font-weight="bold">built</text>
+<rect x="1208" y="112" width="220" height="92" rx="6" fill="#FFFFFF" stroke="#999999" stroke-width="1.2" stroke-dasharray="6 4"/>
+<text x="1318.0" y="145.2" font-size="15" fill="#1A1A1A" text-anchor="middle" font-weight="bold">Class LLM server</text>
+<text x="1318.0" y="163.1" font-size="13" fill="#1A1A1A" text-anchor="middle">Qwen2.5-14B on GPU;</text>
+<text x="1318.0" y="180.2" font-size="13" fill="#1A1A1A" text-anchor="middle">optional, via LLM_BASE_URL</text>
+<rect x="1208" y="222" width="220" height="62" rx="6" fill="#FFFFFF" stroke="#999999" stroke-width="1.2" stroke-dasharray="6 4"/>
+<text x="1318.0" y="248.8" font-size="15" fill="#1A1A1A" text-anchor="middle" font-weight="bold">Hugging Face</text>
+<text x="1318.0" y="266.7" font-size="13" fill="#1A1A1A" text-anchor="middle">model downloads</text>
+<rect x="236" y="830" width="300" height="96" rx="6" fill="#FFFFFF" stroke="#777777" stroke-width="1.2"/>
+<text x="244.0" y="850.2" font-size="15" fill="#1A1A1A" text-anchor="start" font-weight="bold">GitHub: repo + Actions</text>
+<text x="244.0" y="868.6" font-size="13.5" fill="#1A1A1A" text-anchor="start">CI: ruff, mypy, pytest, gitleaks</text>
+<text x="244.0" y="886.4" font-size="13.5" fill="#1A1A1A" text-anchor="start">build → smoke test → push image</text>
+<text x="244.0" y="904.3" font-size="13.5" fill="#1A1A1A" text-anchor="start">issue → PR → review → merge → tag</text>
+<rect x="556" y="830" width="300" height="96" rx="6" fill="#FFFFFF" stroke="#777777" stroke-width="1.2"/>
+<text x="564.0" y="850.2" font-size="15" fill="#1A1A1A" text-anchor="start" font-weight="bold">GitHub Releases</text>
+<text x="564.0" y="868.6" font-size="13.5" fill="#1A1A1A" text-anchor="start">data backups, off the instance</text>
+<text x="564.0" y="886.4" font-size="13.5" fill="#1A1A1A" text-anchor="start">restore checks hashes and</text>
+<text x="564.0" y="904.3" font-size="13.5" fill="#1A1A1A" text-anchor="start">point counts first</text>
+<rect x="767" y="837" width="82" height="19" rx="6" fill="#FFF1D6" stroke="#D9930D" stroke-width="1"/>
+<text x="808.0" y="849.8" font-size="11.5" fill="#7A4F00" text-anchor="middle" font-weight="bold">in progress</text>
+<rect x="876" y="830" width="308" height="96" rx="6" fill="#FFFFFF" stroke="#777777" stroke-width="1.2"/>
+<text x="884.0" y="850.2" font-size="15" fill="#1A1A1A" text-anchor="start" font-weight="bold">GHCR registry</text>
+<text x="884.0" y="868.6" font-size="13.5" fill="#1A1A1A" text-anchor="start">image :sha-&lt;commit&gt; from main</text>
+<text x="884.0" y="886.4" font-size="13.5" fill="#1A1A1A" text-anchor="start">image :v0.2.0 from each tag</text>
+<text x="884.0" y="904.3" font-size="13.5" fill="#1A1A1A" text-anchor="start">public; pulled by tag</text>
+<rect x="1131" y="837" width="46" height="19" rx="6" fill="#E3F4E8" stroke="#3C9A5F" stroke-width="1"/>
+<text x="1154.0" y="849.8" font-size="11.5" fill="#1F6B3A" text-anchor="middle" font-weight="bold">built</text>
+<path d="M210,149 L214,149" fill="none" stroke="#2F6FDE" stroke-width="1.5" marker-end="url(#m2F6FDE)" marker-start="url(#m2F6FDE)"/>
+<path d="M258,149 L276,149" fill="none" stroke="#2F6FDE" stroke-width="1.5" marker-end="url(#m2F6FDE)" marker-start="url(#m2F6FDE)"/>
+<path d="M700,188 L700,262" fill="none" stroke="#2F6FDE" stroke-width="1.5" marker-end="url(#m2F6FDE)" marker-start="url(#m2F6FDE)"/>
+<path d="M504,302 L516,302" fill="none" stroke="#2F6FDE" stroke-width="1.5" marker-end="url(#m2F6FDE)"/>
+<path d="M623,342 L623,354" fill="none" stroke="#2F6FDE" stroke-width="1.5" marker-end="url(#m2F6FDE)"/>
+<path d="M397,524 L397,534" fill="none" stroke="#2F6FDE" stroke-width="1.5" marker-end="url(#m2F6FDE)"/>
+<path d="M744,232 L772,232 L772,158 L800,158" fill="none" stroke="#2F6FDE" stroke-width="1.5" marker-end="url(#m2F6FDE)" marker-start="url(#m2F6FDE)"/>
+<rect x="749.0" y="186.8" width="46.1" height="16.5" fill="#FFFFFF"/>
+<text x="772.0" y="198.8" font-size="11" fill="#2F6FDE" text-anchor="middle">prompt</text>
+<path d="M744,350 L800,350" fill="none" stroke="#2F6FDE" stroke-width="1.5" marker-end="url(#m2F6FDE)" marker-start="url(#m2F6FDE)"/>
+<rect x="750.8" y="341.8" width="42.3" height="16.5" fill="#FFFFFF"/>
+<text x="772.0" y="353.9" font-size="11" fill="#2F6FDE" text-anchor="middle">search</text>
+<path d="M276,690 L210,690" fill="none" stroke="#D9730D" stroke-width="1.5" stroke-dasharray="7 4" marker-end="url(#mD9730D)"/>
+<rect x="224.7" y="681.8" width="36.6" height="16.5" fill="#FFFFFF"/>
+<text x="243.0" y="693.9" font-size="11" fill="#D9730D" text-anchor="middle">fetch</text>
+<path d="M744,640 L786,640 L786,372 L800,372" fill="none" stroke="#D9730D" stroke-width="1.5" stroke-dasharray="7 4" marker-end="url(#mD9730D)"/>
+<path d="M706,782 L706,830" fill="none" stroke="#D9730D" stroke-width="1.5" stroke-dasharray="7 4" marker-end="url(#mD9730D)"/>
+<rect x="684.8" y="797.8" width="42.3" height="16.5" fill="#FFFFFF"/>
+<text x="706.0" y="809.9" font-size="11" fill="#D9730D" text-anchor="middle">backup</text>
+<path d="M976,222 L976,204" fill="none" stroke="#888888" stroke-width="1.5" stroke-dasharray="2 3" marker-end="url(#m888888)"/>
+<path d="M976,396 L976,414" fill="none" stroke="#888888" stroke-width="1.5" stroke-dasharray="2 3" marker-end="url(#m888888)" marker-start="url(#m888888)"/>
+<path d="M1208,253 L1152,253" fill="none" stroke="#888888" stroke-width="1.5" stroke-dasharray="2 3" marker-end="url(#m888888)"/>
+<path d="M276,178 L243,178 L243,244 L210,244" fill="none" stroke="#888888" stroke-width="1.5" stroke-dasharray="2 3" marker-end="url(#m888888)"/>
+<path d="M386,926 L386,956 L1030,956 L1030,926" fill="none" stroke="#888888" stroke-width="1.5" stroke-dasharray="2 3" marker-end="url(#m888888)"/>
+<rect x="676.2" y="947.8" width="63.7" height="16.5" fill="#FFFFFF"/>
+<text x="708.0" y="959.9" font-size="11" fill="#888888" text-anchor="middle">push image</text>
+<path d="M1030,830 L1030,782" fill="none" stroke="#888888" stroke-width="1.5" stroke-dasharray="2 3" marker-end="url(#m888888)"/>
+<rect x="999.8" y="797.8" width="60.4" height="16.5" fill="#FFFFFF"/>
+<text x="1030.0" y="809.9" font-size="11" fill="#888888" text-anchor="middle">pull by tag</text>
+<path d="M236,994 L284,994" fill="none" stroke="#2F6FDE" stroke-width="1.5" marker-end="url(#m2F6FDE)"/>
+<path d="M420,994 L468,994" fill="none" stroke="#D9730D" stroke-width="1.5" stroke-dasharray="7 4" marker-end="url(#mD9730D)"/>
+<path d="M590,994 L638,994" fill="none" stroke="#888888" stroke-width="1.5" stroke-dasharray="2 3" marker-end="url(#m888888)"/>
+<text x="14" y="36.0" font-size="23" fill="#1A1A1A" text-anchor="start" font-weight="bold">Technical Architecture: components, data flow, deployment, time limits</text>
+<text x="1030" y="33.0" font-size="13" fill="#333333" text-anchor="start">Status on Nov 24, 2026:</text>
+<text x="292" y="998.7" font-size="13.5" fill="#1A1A1A" text-anchor="start">live request</text>
+<text x="476" y="998.7" font-size="13.5" fill="#1A1A1A" text-anchor="start">offline job</text>
+<text x="646" y="998.7" font-size="13.5" fill="#1A1A1A" text-anchor="start">storage / setup / release</text>
+<text x="236" y="1025.7" font-size="13.5" fill="#444444" text-anchor="start">Public: only 80 and 443 (Caddy). The app's 8000 is bound to 127.0.0.1; Qdrant (6333) and llm (8080) are not published.</text>
+</svg>

@@ -1,0 +1,239 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="1000" viewBox="0 0 1440 1000" font-family="Helvetica, Arial, sans-serif">
+<defs>
+<marker id="m4F6D9A" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#4F6D9A"/></marker>
+</defs>
+<rect x="0" y="0" width="1440" height="1000" fill="#FFFFFF"/>
+<rect x="1185" y="19" width="46" height="19" rx="6" fill="#E3F4E8" stroke="#3C9A5F" stroke-width="1"/>
+<text x="1208.0" y="31.8" font-size="11.5" fill="#1F6B3A" text-anchor="middle" font-weight="bold">built</text>
+<rect x="1239" y="19" width="82" height="19" rx="6" fill="#FFF1D6" stroke="#D9930D" stroke-width="1"/>
+<text x="1280.0" y="31.8" font-size="11.5" fill="#7A4F00" text-anchor="middle" font-weight="bold">in progress</text>
+<rect x="1329" y="19" width="66" height="19" rx="6" fill="#EEEEEE" stroke="#9A9A9A" stroke-width="1" stroke-dasharray="6 4"/>
+<text x="1362.0" y="31.8" font-size="11.5" fill="#4A4A4A" text-anchor="middle" font-weight="bold">not built</text>
+<rect x="12" y="56" width="1416" height="290" rx="6" fill="#EEF4FB" stroke="#A9C1E0" stroke-width="1.2"/>
+<rect x="12" y="56" width="44" height="290" rx="6" fill="#D9E6F6" stroke="#A9C1E0" stroke-width="1.2"/>
+<rect x="12" y="358" width="1416" height="372" rx="6" fill="#EEF7F1" stroke="#93C4A2" stroke-width="1.2"/>
+<rect x="12" y="358" width="44" height="372" rx="6" fill="#D6EEDD" stroke="#93C4A2" stroke-width="1.2"/>
+<rect x="12" y="742" width="1416" height="246" rx="6" fill="#FDF5EA" stroke="#E0B98A" stroke-width="1.2"/>
+<rect x="12" y="742" width="44" height="246" rx="6" fill="#F7E3C6" stroke="#E0B98A" stroke-width="1.2"/>
+<rect x="66" y="66" width="430" height="270" rx="6" fill="#FFFFFF" stroke="#A9C1E0" stroke-width="1.2"/>
+<text x="74.0" y="88.2" font-size="17" fill="#1A1A1A" text-anchor="start" font-weight="bold">Application Build</text>
+<text x="74.0" y="106.8" font-size="13" fill="#555555" text-anchor="start" font-style="italic">who: our team (developers)</text>
+<rect x="78" y="112" width="406" height="50" rx="6" fill="#F7FAFE" stroke="#C5D5EA" stroke-width="1.2"/>
+<text x="86.0" y="132.2" font-size="15" fill="#1A1A1A" text-anchor="start" font-weight="bold">1. Collect official documents</text>
+<text x="86.0" y="151.1" font-size="14" fill="#1A1A1A" text-anchor="start">eCFR: 8 CFR 214, every amendment since 2020</text>
+<rect x="431" y="119" width="46" height="19" rx="6" fill="#E3F4E8" stroke="#3C9A5F" stroke-width="1"/>
+<text x="454.0" y="131.8" font-size="11.5" fill="#1F6B3A" text-anchor="middle" font-weight="bold">built</text>
+<rect x="78" y="168" width="406" height="50" rx="6" fill="#F7FAFE" stroke="#C5D5EA" stroke-width="1.2"/>
+<text x="86.0" y="188.2" font-size="15" fill="#1A1A1A" text-anchor="start" font-weight="bold">2. Parse into a catalog</text>
+<text x="86.0" y="207.1" font-size="14" fill="#1A1A1A" text-anchor="start">SQLite: provisions, versions, visa types, dates</text>
+<rect x="431" y="175" width="46" height="19" rx="6" fill="#E3F4E8" stroke="#3C9A5F" stroke-width="1"/>
+<text x="454.0" y="187.8" font-size="11.5" fill="#1F6B3A" text-anchor="middle" font-weight="bold">built</text>
+<rect x="78" y="224" width="406" height="50" rx="6" fill="#F7FAFE" stroke="#C5D5EA" stroke-width="1.2"/>
+<text x="86.0" y="244.2" font-size="15" fill="#1A1A1A" text-anchor="start" font-weight="bold">3. Embed and load</text>
+<text x="86.0" y="263.1" font-size="14" fill="#1A1A1A" text-anchor="start">BGE + BM25 → new collection, then switch alias</text>
+<rect x="431" y="231" width="46" height="19" rx="6" fill="#E3F4E8" stroke="#3C9A5F" stroke-width="1"/>
+<text x="454.0" y="243.8" font-size="11.5" fill="#1F6B3A" text-anchor="middle" font-weight="bold">built</text>
+<rect x="78" y="280" width="406" height="50" rx="6" fill="#F7FAFE" stroke="#C5D5EA" stroke-width="1.2"/>
+<text x="86.0" y="300.2" font-size="15" fill="#1A1A1A" text-anchor="start" font-weight="bold">4. Ship a release</text>
+<text x="86.0" y="319.1" font-size="14" fill="#1A1A1A" text-anchor="start">tag → CI tests, builds, smoke-tests → GHCR</text>
+<rect x="431" y="287" width="46" height="19" rx="6" fill="#E3F4E8" stroke="#3C9A5F" stroke-width="1"/>
+<text x="454.0" y="299.8" font-size="11.5" fill="#1F6B3A" text-anchor="middle" font-weight="bold">built</text>
+<rect x="532" y="66" width="430" height="270" rx="6" fill="#FFFFFF" stroke="#A9C1E0" stroke-width="1.2"/>
+<text x="540.0" y="88.2" font-size="17" fill="#1A1A1A" text-anchor="start" font-weight="bold">Application Use</text>
+<text x="540.0" y="106.8" font-size="13" fill="#555555" text-anchor="start" font-style="italic">who: international students, DSOs</text>
+<rect x="544" y="112" width="406" height="50" rx="6" fill="#F7FAFE" stroke="#C5D5EA" stroke-width="1.2"/>
+<text x="552.0" y="132.2" font-size="15" fill="#1A1A1A" text-anchor="start" font-weight="bold">1. Ask a question</text>
+<text x="552.0" y="151.1" font-size="14" fill="#1A1A1A" text-anchor="start">plain English + optional visa type and date</text>
+<rect x="897" y="119" width="46" height="19" rx="6" fill="#E3F4E8" stroke="#3C9A5F" stroke-width="1"/>
+<text x="920.0" y="131.8" font-size="11.5" fill="#1F6B3A" text-anchor="middle" font-weight="bold">built</text>
+<rect x="544" y="168" width="406" height="50" rx="6" fill="#F7FAFE" stroke="#C5D5EA" stroke-width="1.2"/>
+<text x="552.0" y="188.2" font-size="15" fill="#1A1A1A" text-anchor="start" font-weight="bold">2. Read the answer and evidence</text>
+<text x="552.0" y="207.1" font-size="14" fill="#1A1A1A" text-anchor="start">answer + the passages it used, side by side</text>
+<rect x="897" y="175" width="46" height="19" rx="6" fill="#E3F4E8" stroke="#3C9A5F" stroke-width="1"/>
+<text x="920.0" y="187.8" font-size="11.5" fill="#1F6B3A" text-anchor="middle" font-weight="bold">built</text>
+<rect x="544" y="224" width="406" height="50" rx="6" fill="#F7FAFE" stroke="#C5D5EA" stroke-width="1.2"/>
+<text x="552.0" y="244.2" font-size="15" fill="#1A1A1A" text-anchor="start" font-weight="bold">3. Open the source</text>
+<text x="552.0" y="263.1" font-size="14" fill="#1A1A1A" text-anchor="start">each passage links to eCFR as of that date</text>
+<rect x="897" y="231" width="46" height="19" rx="6" fill="#E3F4E8" stroke="#3C9A5F" stroke-width="1"/>
+<text x="920.0" y="243.8" font-size="11.5" fill="#1F6B3A" text-anchor="middle" font-weight="bold">built</text>
+<rect x="544" y="280" width="406" height="50" rx="6" fill="#F7FAFE" stroke="#C5D5EA" stroke-width="1.2"/>
+<text x="552.0" y="300.2" font-size="15" fill="#1A1A1A" text-anchor="start" font-weight="bold">4. Not covered → says so</text>
+<text x="552.0" y="319.1" font-size="14" fill="#1A1A1A" text-anchor="start">no relevant provision → points to the DSO</text>
+<rect x="897" y="287" width="46" height="19" rx="6" fill="#E3F4E8" stroke="#3C9A5F" stroke-width="1"/>
+<text x="920.0" y="299.8" font-size="11.5" fill="#1F6B3A" text-anchor="middle" font-weight="bold">built</text>
+<rect x="998" y="66" width="430" height="270" rx="6" fill="#FFFFFF" stroke="#A9C1E0" stroke-width="1.2"/>
+<text x="1006.0" y="88.2" font-size="17" fill="#1A1A1A" text-anchor="start" font-weight="bold">Application Operations</text>
+<text x="1006.0" y="106.8" font-size="13" fill="#555555" text-anchor="start" font-style="italic">who: our team</text>
+<rect x="1010" y="112" width="406" height="50" rx="6" fill="#F7FAFE" stroke="#C5D5EA" stroke-width="1.2"/>
+<text x="1018.0" y="132.2" font-size="15" fill="#1A1A1A" text-anchor="start" font-weight="bold">Health and readiness</text>
+<text x="1018.0" y="151.1" font-size="14" fill="#1A1A1A" text-anchor="start">/health, /ready, health checks, auto-restart</text>
+<rect x="1363" y="119" width="46" height="19" rx="6" fill="#E3F4E8" stroke="#3C9A5F" stroke-width="1"/>
+<text x="1386.0" y="131.8" font-size="11.5" fill="#1F6B3A" text-anchor="middle" font-weight="bold">built</text>
+<rect x="1010" y="168" width="406" height="50" rx="6" fill="#F7FAFE" stroke="#C5D5EA" stroke-width="1.2"/>
+<text x="1018.0" y="188.2" font-size="15" fill="#1A1A1A" text-anchor="start" font-weight="bold">Evaluation after every deploy</text>
+<text x="1018.0" y="207.1" font-size="14" fill="#1A1A1A" text-anchor="start">25 known questions; baseline 19/25</text>
+<rect x="1363" y="175" width="46" height="19" rx="6" fill="#E3F4E8" stroke="#3C9A5F" stroke-width="1"/>
+<text x="1386.0" y="187.8" font-size="11.5" fill="#1F6B3A" text-anchor="middle" font-weight="bold">built</text>
+<rect x="1010" y="224" width="406" height="50" rx="6" fill="#F7FAFE" stroke="#C5D5EA" stroke-width="1.2"/>
+<text x="1018.0" y="244.2" font-size="15" fill="#1A1A1A" text-anchor="start" font-weight="bold">Deploy and roll back</text>
+<text x="1018.0" y="263.1" font-size="14" fill="#1A1A1A" text-anchor="start">scripts/deploy.sh &lt;version&gt;; deploy.log</text>
+<rect x="1363" y="231" width="46" height="19" rx="6" fill="#E3F4E8" stroke="#3C9A5F" stroke-width="1"/>
+<text x="1386.0" y="243.8" font-size="11.5" fill="#1F6B3A" text-anchor="middle" font-weight="bold">built</text>
+<rect x="1010" y="280" width="406" height="50" rx="6" fill="#F7FAFE" stroke="#C5D5EA" stroke-width="1.2"/>
+<text x="1018.0" y="300.2" font-size="15" fill="#1A1A1A" text-anchor="start" font-weight="bold">Logs and metrics</text>
+<text x="1018.0" y="319.1" font-size="14" fill="#1A1A1A" text-anchor="start">JSON logs + request id; /metrics, Grafana</text>
+<rect x="1327" y="287" width="82" height="19" rx="6" fill="#FFF1D6" stroke="#D9930D" stroke-width="1"/>
+<text x="1368.0" y="299.8" font-size="11.5" fill="#7A4F00" text-anchor="middle" font-weight="bold">in progress</text>
+<rect x="66" y="368" width="290" height="352" rx="6" fill="#FFFFFF" stroke="#93C4A2" stroke-width="1.2"/>
+<text x="74.0" y="390.1" font-size="17" fill="#1A1A1A" text-anchor="start" font-weight="bold">Frontend</text>
+<text x="74.0" y="408.8" font-size="13" fill="#555555" text-anchor="start" font-style="italic">one page served by FastAPI at /</text>
+<rect x="303" y="375" width="46" height="19" rx="6" fill="#E3F4E8" stroke="#3C9A5F" stroke-width="1"/>
+<text x="326.0" y="387.8" font-size="11.5" fill="#1F6B3A" text-anchor="middle" font-weight="bold">built</text>
+<rect x="78" y="418" width="266" height="236" rx="6" fill="#FAFAFA" stroke="#BBBBBB" stroke-width="1.2"/>
+<rect x="88" y="430" width="186" height="32" rx="6" fill="#FFFFFF" stroke="#999999" stroke-width="1.2"/>
+<text x="96.0" y="449.8" font-size="13" fill="#555555" text-anchor="start">Can I work on campus?</text>
+<rect x="280" y="430" width="54" height="32" rx="6" fill="#2F6FDE" stroke="#2F6FDE" stroke-width="1.2"/>
+<text x="307.0" y="450.1" font-size="14" fill="#FFFFFF" text-anchor="middle" font-weight="bold">Ask</text>
+<rect x="88" y="472" width="246" height="88" rx="6" fill="#FFFFFF" stroke="#DDDDDD" stroke-width="1.2"/>
+<text x="96.0" y="490.4" font-size="13" fill="#1A1A1A" text-anchor="start">F-1 students can work on campus</text>
+<text x="96.0" y="507.5" font-size="13" fill="#1A1A1A" text-anchor="start">up to 20 hours a week while school</text>
+<text x="96.0" y="524.7" font-size="13" fill="#1A1A1A" text-anchor="start">is in session. Confirm with your DSO.</text>
+<rect x="88" y="570" width="246" height="72" rx="6" fill="#F3F7FC" stroke="#C5D5EA" stroke-width="1.2"/>
+<text x="96.0" y="588.4" font-size="13" fill="#1A1A1A" text-anchor="start" font-weight="bold">[1] 8 CFR 214.2(f)(9)(i)</text>
+<text x="96.0" y="605.0" font-size="12.5" fill="#1A1A1A" text-anchor="start">On-campus employment</text>
+<text x="96.0" y="621.5" font-size="12.5" fill="#1A1A1A" text-anchor="start">in force · View on eCFR ↗</text>
+<rect x="78" y="662" width="266" height="50" rx="6" fill="none" stroke="none" stroke-width="1.2"/>
+<text x="86.0" y="680.4" font-size="13" fill="#1A1A1A" text-anchor="start">sketch of the live page; slow or</text>
+<text x="86.0" y="697.5" font-size="13" fill="#1A1A1A" text-anchor="start">failed answers get a plain message</text>
+<rect x="368" y="368" width="300" height="352" rx="6" fill="#FFFFFF" stroke="#93C4A2" stroke-width="1.2"/>
+<text x="376.0" y="390.1" font-size="17" fill="#1A1A1A" text-anchor="start" font-weight="bold">HTTPS API</text>
+<text x="376.0" y="408.8" font-size="13" fill="#555555" text-anchor="start" font-style="italic">Caddy :443 → FastAPI on 127.0.0.1</text>
+<rect x="378" y="418" width="280" height="80" rx="6" fill="#F6FBF7" stroke="#BBDCC5" stroke-width="1.2"/>
+<text x="386.0" y="437.3" font-size="14" fill="#1A1A1A" text-anchor="start" font-weight="bold">POST /ask</text>
+<text x="386.0" y="454.4" font-size="12.5" fill="#1A1A1A" text-anchor="start">in: question ≤1000 chars, visa, date</text>
+<text x="386.0" y="470.9" font-size="12.5" fill="#1A1A1A" text-anchor="start">out: answer, sources, status</text>
+<text x="386.0" y="487.4" font-size="12.5" fill="#1A1A1A" text-anchor="start">10 a minute per client, then 429</text>
+<rect x="605" y="425" width="46" height="19" rx="6" fill="#E3F4E8" stroke="#3C9A5F" stroke-width="1"/>
+<text x="628.0" y="437.8" font-size="11.5" fill="#1F6B3A" text-anchor="middle" font-weight="bold">built</text>
+<rect x="378" y="504" width="280" height="44" rx="6" fill="#F6FBF7" stroke="#BBDCC5" stroke-width="1.2"/>
+<text x="386.0" y="523.3" font-size="14" fill="#1A1A1A" text-anchor="start" font-weight="bold">POST /retrieve</text>
+<text x="386.0" y="540.4" font-size="12.5" fill="#1A1A1A" text-anchor="start">passages only; 30 a minute</text>
+<rect x="605" y="511" width="46" height="19" rx="6" fill="#E3F4E8" stroke="#3C9A5F" stroke-width="1"/>
+<text x="628.0" y="523.8" font-size="11.5" fill="#1F6B3A" text-anchor="middle" font-weight="bold">built</text>
+<rect x="378" y="554" width="280" height="60" rx="6" fill="#F6FBF7" stroke="#BBDCC5" stroke-width="1.2"/>
+<text x="386.0" y="573.3" font-size="14" fill="#1A1A1A" text-anchor="start" font-weight="bold">GET /health · /ready · /docs</text>
+<text x="386.0" y="590.4" font-size="12.5" fill="#1A1A1A" text-anchor="start">process up · model + index loaded</text>
+<text x="386.0" y="606.9" font-size="12.5" fill="#1A1A1A" text-anchor="start">· OpenAPI page</text>
+<rect x="605" y="561" width="46" height="19" rx="6" fill="#E3F4E8" stroke="#3C9A5F" stroke-width="1"/>
+<text x="628.0" y="573.8" font-size="11.5" fill="#1F6B3A" text-anchor="middle" font-weight="bold">built</text>
+<rect x="378" y="620" width="280" height="44" rx="6" fill="#F6FBF7" stroke="#BBDCC5" stroke-width="1.2"/>
+<text x="386.0" y="639.3" font-size="14" fill="#1A1A1A" text-anchor="start" font-weight="bold">POST /admin/generate</text>
+<text x="386.0" y="656.4" font-size="12.5" fill="#1A1A1A" text-anchor="start">X-Admin-Key, else 401</text>
+<rect x="605" y="627" width="46" height="19" rx="6" fill="#E3F4E8" stroke="#3C9A5F" stroke-width="1"/>
+<text x="628.0" y="639.8" font-size="11.5" fill="#1F6B3A" text-anchor="middle" font-weight="bold">built</text>
+<rect x="378" y="670" width="280" height="44" rx="6" fill="#F6FBF7" stroke="#BBDCC5" stroke-width="1.2"/>
+<text x="386.0" y="689.3" font-size="14" fill="#1A1A1A" text-anchor="start" font-weight="bold">GET /metrics</text>
+<text x="386.0" y="706.4" font-size="12.5" fill="#1A1A1A" text-anchor="start">counts, latency, tokens</text>
+<rect x="569" y="677" width="82" height="19" rx="6" fill="#FFF1D6" stroke="#D9930D" stroke-width="1"/>
+<text x="610.0" y="689.8" font-size="11.5" fill="#7A4F00" text-anchor="middle" font-weight="bold">in progress</text>
+<rect x="680" y="368" width="430" height="352" rx="6" fill="#FFFFFF" stroke="#93C4A2" stroke-width="1.2"/>
+<text x="688.0" y="390.1" font-size="17" fill="#1A1A1A" text-anchor="start" font-weight="bold">Backend (inside the app)</text>
+<text x="688.0" y="408.8" font-size="13" fill="#555555" text-anchor="start" font-style="italic">Qdrant and the LLM are internal services</text>
+<rect x="692" y="412" width="406" height="50" rx="6" fill="#F6FBF7" stroke="#BBDCC5" stroke-width="1.2"/>
+<text x="700.0" y="432.2" font-size="15" fill="#1A1A1A" text-anchor="start" font-weight="bold">1. Retrieve</text>
+<text x="700.0" y="450.6" font-size="13.5" fill="#1A1A1A" text-anchor="start">BGE + BM25 hybrid, RRF, top 3; visa, date filters</text>
+<rect x="1045" y="419" width="46" height="19" rx="6" fill="#E3F4E8" stroke="#3C9A5F" stroke-width="1"/>
+<text x="1068.0" y="431.8" font-size="11.5" fill="#1F6B3A" text-anchor="middle" font-weight="bold">built</text>
+<rect x="692" y="474" width="406" height="50" rx="6" fill="#F6FBF7" stroke="#BBDCC5" stroke-width="1.2"/>
+<text x="700.0" y="494.2" font-size="15" fill="#1A1A1A" text-anchor="start" font-weight="bold">2. Relevance gate</text>
+<text x="700.0" y="512.6" font-size="13.5" fill="#1A1A1A" text-anchor="start">nothing with cosine ≥ 0.65 → "not covered"</text>
+<rect x="1045" y="481" width="46" height="19" rx="6" fill="#E3F4E8" stroke="#3C9A5F" stroke-width="1"/>
+<text x="1068.0" y="493.8" font-size="11.5" fill="#1F6B3A" text-anchor="middle" font-weight="bold">built</text>
+<rect x="692" y="536" width="406" height="50" rx="6" fill="#F6FBF7" stroke="#BBDCC5" stroke-width="1.2"/>
+<text x="700.0" y="556.2" font-size="15" fill="#1A1A1A" text-anchor="start" font-weight="bold">3. Wait for a model slot</text>
+<text x="700.0" y="574.6" font-size="13.5" fill="#1A1A1A" text-anchor="start">2 slots; after 60 s → passages only</text>
+<rect x="1045" y="543" width="46" height="19" rx="6" fill="#E3F4E8" stroke="#3C9A5F" stroke-width="1"/>
+<text x="1068.0" y="555.8" font-size="11.5" fill="#1F6B3A" text-anchor="middle" font-weight="bold">built</text>
+<rect x="692" y="598" width="406" height="50" rx="6" fill="#F6FBF7" stroke="#BBDCC5" stroke-width="1.2"/>
+<text x="700.0" y="618.2" font-size="15" fill="#1A1A1A" text-anchor="start" font-weight="bold">4. Generate</text>
+<text x="700.0" y="636.6" font-size="13.5" fill="#1A1A1A" text-anchor="start">Qwen2.5-1.5B, answer only from the passages</text>
+<rect x="1045" y="605" width="46" height="19" rx="6" fill="#E3F4E8" stroke="#3C9A5F" stroke-width="1"/>
+<text x="1068.0" y="617.8" font-size="11.5" fill="#1F6B3A" text-anchor="middle" font-weight="bold">built</text>
+<rect x="692" y="660" width="406" height="50" rx="6" fill="#F6FBF7" stroke="#BBDCC5" stroke-width="1.2" stroke-dasharray="6 4"/>
+<text x="700.0" y="680.2" font-size="15" fill="#1A1A1A" text-anchor="start" font-weight="bold">5. Check the answer</text>
+<text x="700.0" y="698.6" font-size="13.5" fill="#1A1A1A" text-anchor="start">every [n] is a hit; claims backed by text</text>
+<rect x="1025" y="667" width="66" height="19" rx="6" fill="#EEEEEE" stroke="#9A9A9A" stroke-width="1"/>
+<text x="1058.0" y="679.8" font-size="11.5" fill="#4A4A4A" text-anchor="middle" font-weight="bold">not built</text>
+<rect x="1122" y="368" width="306" height="352" rx="6" fill="#FFFFFF" stroke="#93C4A2" stroke-width="1.2"/>
+<text x="1130.0" y="389.2" font-size="16" fill="#1A1A1A" text-anchor="start" font-weight="bold">Evaluation</text>
+<text x="1130.0" y="407.9" font-size="13.5" fill="#1A1A1A" text-anchor="start">25 questions with known answers:</text>
+<text x="1142.0" y="425.8" font-size="13.5" fill="#1A1A1A" text-anchor="start">10 from HW3 testers, 11 common</text>
+<text x="1142.0" y="443.6" font-size="13.5" fill="#1A1A1A" text-anchor="start">F/M/J questions, 4 to decline</text>
+<text x="1130.0" y="461.4" font-size="13.5" fill="#1A1A1A" text-anchor="start">Expected provisions checked</text>
+<text x="1142.0" y="479.2" font-size="13.5" fill="#1A1A1A" text-anchor="start">against the eCFR text</text>
+<text x="1130.0" y="497.0" font-size="13.5" fill="#1A1A1A" text-anchor="start">Baseline (build testers used):</text>
+<text x="1142.0" y="514.9" font-size="13.5" fill="#1A1A1A" text-anchor="start">19/25 pass · source found 16/20</text>
+<text x="1142.0" y="532.7" font-size="13.5" fill="#1A1A1A" text-anchor="start">inline citations 0/19</text>
+<text x="1130.0" y="550.5" font-size="13.5" fill="#1A1A1A" text-anchor="start">Runs after every deploy;</text>
+<text x="1142.0" y="568.3" font-size="13.5" fill="#1A1A1A" text-anchor="start">each fix is measured against it</text>
+<text x="1130.0" y="586.1" font-size="13.5" fill="#1A1A1A" text-anchor="start">Failures trace to root causes (#57)</text>
+<rect x="1375" y="375" width="46" height="19" rx="6" fill="#E3F4E8" stroke="#3C9A5F" stroke-width="1"/>
+<text x="1398.0" y="387.8" font-size="11.5" fill="#1F6B3A" text-anchor="middle" font-weight="bold">built</text>
+<rect x="66" y="752" width="330" height="226" rx="6" fill="#FFFFFF" stroke="#E0B98A" stroke-width="1.2"/>
+<text x="74.0" y="773.2" font-size="16" fill="#1A1A1A" text-anchor="start" font-weight="bold">Code, releases, config</text>
+<text x="74.0" y="791.5" font-size="13" fill="#555555" text-anchor="start" font-style="italic">GitHub · GHCR · .env on TEAM02</text>
+<text x="74.0" y="809.1" font-size="13.5" fill="#1A1A1A" text-anchor="start">• issue → branch → PR → review → merge</text>
+<text x="74.0" y="826.9" font-size="13.5" fill="#1A1A1A" text-anchor="start">• CI: ruff, mypy, pytest, gitleaks,</text>
+<text x="86.0" y="844.7" font-size="13.5" fill="#1A1A1A" text-anchor="start">image smoke test, push to GHCR</text>
+<text x="74.0" y="862.6" font-size="13.5" fill="#1A1A1A" text-anchor="start">• release = version + tag + image;</text>
+<text x="86.0" y="880.4" font-size="13.5" fill="#1A1A1A" text-anchor="start">TEAM02 runs it pinned by digest</text>
+<text x="74.0" y="898.2" font-size="13.5" fill="#1A1A1A" text-anchor="start">• secrets only in .env; no accounts</text>
+<rect x="343" y="759" width="46" height="19" rx="6" fill="#E3F4E8" stroke="#3C9A5F" stroke-width="1"/>
+<text x="366.0" y="771.8" font-size="11.5" fill="#1F6B3A" text-anchor="middle" font-weight="bold">built</text>
+<rect x="408" y="752" width="330" height="226" rx="6" fill="#FFFFFF" stroke="#E0B98A" stroke-width="1.2"/>
+<text x="416.0" y="773.2" font-size="16" fill="#1A1A1A" text-anchor="start" font-weight="bold">Documents and vectors</text>
+<text x="416.0" y="791.5" font-size="13" fill="#555555" text-anchor="start" font-style="italic">named volumes on the 40 GB volume</text>
+<text x="416.0" y="809.1" font-size="13.5" fill="#1A1A1A" text-anchor="start">• catalog-data: raw eCFR responses +</text>
+<text x="428.0" y="826.9" font-size="13.5" fill="#1A1A1A" text-anchor="start">catalog.sqlite, the source of truth</text>
+<text x="416.0" y="844.7" font-size="13.5" fill="#1A1A1A" text-anchor="start">• qdrant-storage: provisions_vN behind</text>
+<text x="428.0" y="862.6" font-size="13.5" fill="#1A1A1A" text-anchor="start">an alias; rebuilt from the catalog</text>
+<text x="416.0" y="880.4" font-size="13.5" fill="#1A1A1A" text-anchor="start">• full rebuild from eCFR: ~25 min</text>
+<text x="416.0" y="898.2" font-size="13.5" fill="#1A1A1A" text-anchor="start">• migrations back the catalog up first</text>
+<rect x="685" y="759" width="46" height="19" rx="6" fill="#E3F4E8" stroke="#3C9A5F" stroke-width="1"/>
+<text x="708.0" y="771.8" font-size="11.5" fill="#1F6B3A" text-anchor="middle" font-weight="bold">built</text>
+<rect x="750" y="752" width="330" height="226" rx="6" fill="#FFFFFF" stroke="#E0B98A" stroke-width="1.2"/>
+<text x="758.0" y="773.2" font-size="16" fill="#1A1A1A" text-anchor="start" font-weight="bold">Models and certificate</text>
+<text x="758.0" y="791.5" font-size="13" fill="#555555" text-anchor="start" font-style="italic">named volumes</text>
+<text x="758.0" y="809.1" font-size="13.5" fill="#1A1A1A" text-anchor="start">• llm-models: Qwen weights (1.1 GB)</text>
+<text x="758.0" y="826.9" font-size="13.5" fill="#1A1A1A" text-anchor="start">• embed-cache: BGE + BM25 (~70 MB)</text>
+<text x="758.0" y="844.7" font-size="13.5" fill="#1A1A1A" text-anchor="start">• caddy-data: TLS certificate,</text>
+<text x="770.0" y="862.6" font-size="13.5" fill="#1A1A1A" text-anchor="start">renewed automatically</text>
+<text x="758.0" y="880.4" font-size="13.5" fill="#1A1A1A" text-anchor="start">• images pinned by digest; swap the</text>
+<text x="770.0" y="898.2" font-size="13.5" fill="#1A1A1A" text-anchor="start">model with .env and a restart</text>
+<rect x="1027" y="759" width="46" height="19" rx="6" fill="#E3F4E8" stroke="#3C9A5F" stroke-width="1"/>
+<text x="1050.0" y="771.8" font-size="11.5" fill="#1F6B3A" text-anchor="middle" font-weight="bold">built</text>
+<rect x="1092" y="752" width="330" height="226" rx="6" fill="#FFFFFF" stroke="#E0B98A" stroke-width="1.2"/>
+<text x="1100.0" y="773.2" font-size="16" fill="#1A1A1A" text-anchor="start" font-weight="bold">Backups, logs, metrics</text>
+<text x="1100.0" y="791.5" font-size="13" fill="#555555" text-anchor="start" font-style="italic">off the instance</text>
+<text x="1100.0" y="809.1" font-size="13.5" fill="#1A1A1A" text-anchor="start">• catalog + Qdrant snapshot → GitHub</text>
+<text x="1112.0" y="826.9" font-size="13.5" fill="#1A1A1A" text-anchor="start">release; restore checks before it</text>
+<text x="1112.0" y="844.7" font-size="13.5" fill="#1A1A1A" text-anchor="start">replaces anything (#55)</text>
+<text x="1100.0" y="862.6" font-size="13.5" fill="#1A1A1A" text-anchor="start">• JSON logs with a request id;</text>
+<text x="1112.0" y="880.4" font-size="13.5" fill="#1A1A1A" text-anchor="start">no question text, no keys</text>
+<text x="1100.0" y="898.2" font-size="13.5" fill="#1A1A1A" text-anchor="start">• /metrics → Prometheus → Grafana</text>
+<rect x="1333" y="759" width="82" height="19" rx="6" fill="#FFF1D6" stroke="#D9930D" stroke-width="1"/>
+<text x="1374.0" y="771.8" font-size="11.5" fill="#7A4F00" text-anchor="middle" font-weight="bold">in progress</text>
+<path d="M496,216 L532,216" fill="none" stroke="#4F6D9A" stroke-width="1.5" marker-end="url(#m4F6D9A)"/>
+<path d="M962,216 L998,216" fill="none" stroke="#4F6D9A" stroke-width="1.5" marker-end="url(#m4F6D9A)"/>
+<path d="M895,462 L895,474" fill="none" stroke="#4F6D9A" stroke-width="1.5" marker-end="url(#m4F6D9A)"/>
+<path d="M895,524 L895,536" fill="none" stroke="#4F6D9A" stroke-width="1.5" marker-end="url(#m4F6D9A)"/>
+<path d="M895,586 L895,598" fill="none" stroke="#4F6D9A" stroke-width="1.5" marker-end="url(#m4F6D9A)"/>
+<path d="M895,648 L895,660" fill="none" stroke="#4F6D9A" stroke-width="1.5" marker-end="url(#m4F6D9A)"/>
+<path d="M356,445 L378,445" fill="none" stroke="#4F6D9A" stroke-width="1.5" marker-end="url(#m4F6D9A)" marker-start="url(#m4F6D9A)"/>
+<path d="M658,437 L692,437" fill="none" stroke="#4F6D9A" stroke-width="1.5" marker-end="url(#m4F6D9A)" marker-start="url(#m4F6D9A)"/>
+<text x="14" y="36.0" font-size="23" fill="#1A1A1A" text-anchor="start" font-weight="bold">Solution Architecture: Immigration Rules Q&amp;A for International Students</text>
+<text x="1030" y="33.0" font-size="13" fill="#333333" text-anchor="start">Status on Nov 24, 2026:</text>
+<text x="34.0" y="201.0" transform="rotate(-90 34.0 201.0)" font-size="17" fill="#333333" text-anchor="middle" dominant-baseline="central" font-weight="bold" letter-spacing="2">PROCESS</text>
+<text x="34.0" y="544.0" transform="rotate(-90 34.0 544.0)" font-size="17" fill="#333333" text-anchor="middle" dominant-baseline="central" font-weight="bold" letter-spacing="2">EXECUTION</text>
+<text x="34.0" y="865.0" transform="rotate(-90 34.0 865.0)" font-size="17" fill="#333333" text-anchor="middle" dominant-baseline="central" font-weight="bold" letter-spacing="2">STATE</text>
+</svg>
