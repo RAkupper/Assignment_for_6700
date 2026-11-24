@@ -63,14 +63,19 @@ class CatalogTooOldError(RuntimeError):
 
 
 class DocumentEncoder(Protocol):
+    """What the loader needs from an encoder; tests pass a fake."""
+
     dense_model: str
     dim: int
 
-    def embed_documents(self, texts: Sequence[str]) -> list[Encoded]: ...
+    def embed_documents(self, texts: Sequence[str]) -> list[Encoded]:
+        """Encode provision texts for storage."""
 
 
 @dataclass(frozen=True)
 class Chunk:
+    """One provision version ready to embed, with the payload stored beside it."""
+
     provision_id: str
     version: int
     chunk: int
@@ -197,6 +202,7 @@ def build(
 
 
 def main(argv: Sequence[str] | None = None) -> None:
+    """Build a collection version from the catalog, and move the alias if asked."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--catalog", type=Path)  # default: INGEST_DATA_DIR's catalog
     parser.add_argument("--version", type=int)  # default: next free version

@@ -24,6 +24,8 @@ from myapp.vectordb.encoders import EmbeddingSettings, Encoded, Encoder
 
 
 class SearchSettings(BaseSettings):
+    """How many hits to return and the relevance cutoff, from SEARCH_* variables."""
+
     model_config = SettingsConfigDict(
         env_prefix="SEARCH_",
         env_file=".env",
@@ -37,7 +39,10 @@ class SearchSettings(BaseSettings):
 
 
 class QueryEncoder(Protocol):
-    def embed_query(self, text: str) -> Encoded: ...
+    """What the searcher needs from an encoder; tests pass a fake."""
+
+    def embed_query(self, text: str) -> Encoded:
+        """Encode a question for search."""
 
 
 class Hit(BaseModel):
@@ -112,6 +117,7 @@ class Searcher:
         collection: str,
         settings: SearchSettings | None = None,
     ) -> None:
+        """Search `collection`, normally the alias, with these settings."""
         self.client = client
         self.encoder = encoder
         self.collection = collection  # the alias, so a rollback needs no restart
@@ -119,6 +125,7 @@ class Searcher:
 
     @classmethod
     def from_settings(cls) -> "Searcher":
+        """Connect and load the models from environment settings."""
         settings = QdrantSettings()
         return cls(
             get_client(settings),
@@ -213,6 +220,7 @@ def _hit(point: models.ScoredPoint, relevance: float, as_of: date | None = None)
 
 
 def main(argv: Sequence[str] | None = None) -> None:
+    """Search from the command line and print each hit with its scores."""
     parser = argparse.ArgumentParser(description="Search the live collection.")
     parser.add_argument("query")
     parser.add_argument("-k", type=int)
