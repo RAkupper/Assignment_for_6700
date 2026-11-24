@@ -4,7 +4,20 @@ What changed for users in each release. The version lives in `pyproject.toml`;
 each release is a Git tag (`v0.2.0`) and an image in the GitHub Container Registry
 under the same tag. How to cut and deploy one: [docs/deployment.md](docs/deployment.md#release-and-deploy).
 
-## 0.2.0
+## 0.2.1 (2026-11-24)
+
+### Changed
+- Every request to Qdrant gives up after `QDRANT_TIMEOUT_S` (5 s; 60 s in the jobs
+  container) instead of relying on the client library's default. A search takes
+  well under 0.2 s, so a stuck Qdrant now fails fast with a 503 and `Retry-After`
+  (#66).
+
+### Documentation
+- A runbook with the exact commands and real outputs for each routine task (#63).
+- The final architecture diagrams, including where each time limit sits (#64).
+- A postmortem on the app's link breaking each time TEAM02's IP changed (#65).
+
+## 0.2.0 (2026-11-24)
 
 The walking skeleton becomes a service you can reach, ship and roll back.
 
