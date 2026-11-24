@@ -372,6 +372,14 @@ writes into the live collection. If a load crashes partway, rerun it with
 `--version N --replace` to rebuild that unfinished version. The first run downloads
 the embedding models (about 70 MB).
 
+**How long rebuilding the data takes.** Rebuilding everything from eCFR (8 CFR 214,
+64 snapshots since 2020, 3,882 provision versions) took 23 minutes, measured Nov 6
+on one CPU, the `jobs` container's limit: 170 s to fetch, 12 s to parse and 19.5 min
+to load, with `jobs` peaking at 2.3 GB of memory. Almost all of it is embedding, so
+run a load when nobody is testing. Restoring the same data from a backup took 4 s
+onto empty volumes, plus downloading its 43 MB; see
+[Back up and restore](docs/runbook.md#back-up-and-restore).
+
 ### 3. Check and roll back
 
 ```bash
