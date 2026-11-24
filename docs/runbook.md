@@ -200,15 +200,111 @@ Keep TEAM02 running from Dec 1 through the presentation on Dec 2.
 
 ## Back up and restore
 
-Not available yet: #55 adds `scripts/backup.sh` (copies the catalog with SQLite's
-backup API and takes a Qdrant snapshot, then uploads both to a GitHub release, off
-the instance) and `scripts/restore.sh` (checks a backup before replacing anything).
-It waits for a fine-grained token that only the repo owner can create. This section
-gets the exact commands and the result of our first restore once it's merged.
+Each backup is a `data-<UTC time>` release in this repo, off Jetstream2. What it
+holds and how big it is: [Backups off Jetstream2](deployment.md#backups-off-jetstream2).
+Take one after every load that changes the data.
 
-Until then: catalog migrations copy the catalog to `/data/backups/` before changing
-it, and the data can always be rebuilt from eCFR ([fresh install](#fresh-install),
-step 3, about 25 minutes).
+### Token (once)
+
+Uploading needs a fine-grained token. Fine-grained tokens only reach repos owned by
+the account that makes them, so the repo owner (RAkupper) creates it:
+**Settings → Developer settings → Fine-grained tokens → Generate new token**, resource
+owner RAkupper, **Only select repositories** → `Assignment_for_6700`, permission
+**Contents: Read and write**, expiry after the semester. On TEAM02, put it in its own
+file, which git and Docker builds ignore like `.env`:
+
+```bash
+echo "BACKUP_GITHUB_TOKEN=<token>" > .env.backup && chmod 600 .env.backup
+```
+
+Only the `jobs` container reads `.env.backup`. The app, which faces the internet, never
+holds the token. Restoring and listing need no token.
+
+### Take one
+
+```bash
+scripts/backup.sh
+docker compose run --rm jobs python -m myapp.backup list
+```
+
+It creates a draft release, uploads the four files, and only then publishes it, so a
+failed upload never looks like a backup. A systemd timer also runs it every week;
+`Persistent=true` catches up after a shelve. Install it once, on the instance:
+
+`/etc/systemd/system/team02-backup.service`:
+
+```ini
+[Unit]
+Description=Back up the catalog and Qdrant to a GitHub data release
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+User=exouser
+ExecStart=/home/exouser/Assignment_for_6700/scripts/backup.sh
+```
+
+`/etc/systemd/system/team02-backup.timer`:
+
+```ini
+[Timer]
+OnCalendar=Sun *-*-* 06:00:00 UTC
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+```
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now team02-backup.timer
+systemctl list-timers team02-backup.timer   # next run
+journalctl -u team02-backup.service -n 20   # last run's output
+```
+
+### Restore
+
+```bash
+scripts/restore.sh                          # the newest backup
+scripts/restore.sh data-20261106T060000Z    # a specific one
+scripts/restore.sh latest --no-activate     # load it, leave the alias alone
+```
+
+Nothing is replaced until every check passes:
+
+- every file matches its sha256 in the manifest;
+- the catalog passes `PRAGMA integrity_check` and has the manifest's schema and row count;
+- the snapshot loads into a new `provisions_v<N>` with the manifest's point count.
+
+Only then is the current catalog saved to `/data/backups/`, the backup's catalog and
+files put in place, and the alias moved to the new collection. If any step fails, the
+new collection is dropped and the old catalog put back. Existing collections are never
+overwritten, so rolling back is one `activate` command.
+
+### Restore drill
+
+Practice on empty volumes without touching the live stack. `-p drill` is a separate
+Compose project with its own volumes:
+
+```bash
+docker compose -p drill up -d --wait qdrant
+docker compose -p drill run --rm jobs python -m myapp.backup restore latest
+docker compose -p drill run --rm jobs python -m myapp.vectordb.collection status
+docker compose -p drill down -v
+```
+
+The status should show the manifest's collection and point count as live. The same
+steps without `-p drill`, followed by `docker compose up -d`, rebuild the stack on a
+new instance or a laptop.
+
+Measured Nov 6 with that 43 MB backup: the restore onto empty volumes took 4 s and
+gave back all 3,882 points, the alias, the catalog and the raw files, and a search
+returned the same ranking as the original. Rebuilding the same data from eCFR took
+23 minutes: 170 s to fetch 64 snapshots, 12 s to parse, and 19.5 min to load on one CPU.
+
+These figures come from a copy of TEAM02's data, not TEAM02 itself. After the first
+backup and restore on TEAM02, paste their output here.
 
 ## Fresh install
 
@@ -243,6 +339,9 @@ search index.
    docker compose run --rm jobs python -m myapp.vectordb.loader --activate
    docker compose run --rm jobs python -m myapp.vectordb.collection status
    ```
+
+   If a backup exists, run `scripts/restore.sh` instead of the fetch, parse and
+   loader commands; it takes seconds rather than 25 minutes. See [Restore](#restore).
 
    The first command builds the image from the checkout, which is fine for loading;
    Compose first says `pull access denied for assignment_for_6700-app`, which is
