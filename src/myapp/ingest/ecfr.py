@@ -21,6 +21,8 @@ def split_part(part: str) -> tuple[str, str]:
 
 
 class EcfrSource:
+    """One eCFR part as a Source: a snapshot per amendment date since ECFR_SINCE."""
+
     name: SourceName = "ecfr"
 
     def __init__(
@@ -30,6 +32,7 @@ class EcfrSource:
         part: str,
         already_fetched: Callable[[str], bool] = lambda url: False,
     ) -> None:
+        """Set up a part such as "8 CFR 214"; already_fetched skips stored URLs."""
         self.base = str(settings.ecfr_base_url).rstrip("/")
         self.since = settings.ecfr_since.isoformat()
         self.client = client
@@ -37,12 +40,14 @@ class EcfrSource:
         self.already_fetched = already_fetched
 
     def versions_url(self) -> str:
+        """The eCFR API URL that lists every amendment date for this part."""
         return (
             f"{self.base}/api/versioner/v1/versions/title-{self.title}.json"
             f"?part={self.part}"
         )
 
     def snapshot_url(self, day: str) -> str:
+        """The eCFR API URL for the full XML of this part as it read on `day`."""
         return (
             f"{self.base}/api/versioner/v1/full/{day}/title-{self.title}.xml"
             f"?part={self.part}"
@@ -56,6 +61,7 @@ class EcfrSource:
         return sorted({self.since} | {d for d in dates if d > self.since})
 
     def fetch(self) -> Iterator[RawDocument]:
+        """Download each snapshot not fetched yet, oldest first. Network only."""
         for day in self.snapshot_dates():
             url = self.snapshot_url(day)
             if self.already_fetched(url):
@@ -72,6 +78,7 @@ class EcfrSource:
             )
 
     def validate(self, raw: RawDocument) -> str | None:
+        """Why to reject a response, or None when it is this part's XML."""
         if raw.status_code != 200:
             return f"HTTP {raw.status_code}"
         if "xml" not in raw.content_type:
@@ -90,6 +97,7 @@ class EcfrSource:
         return None
 
     def parse(self, raw: RawDocument) -> Iterator[Record]:
+        """Records for every provision with text in one snapshot. No network."""
         return records(raw, parse_part(raw.body, self.title))
 
 
@@ -104,6 +112,7 @@ def provision_url(provision_id: str, day: str) -> str:
 
 
 def records(raw: RawDocument, report: ParseReport) -> Iterator[Record]:
+    """Turn parsed provisions into Records dated by the snapshot they came from."""
     day = raw.source_version or raw.retrieved_at.date().isoformat()
     for p in with_text(report):
         yield Record(

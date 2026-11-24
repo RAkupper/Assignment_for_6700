@@ -76,6 +76,8 @@ VISA_RULES: tuple[tuple[str, tuple[str, ...]], ...] = (  # docs/ingestion.md
 
 @dataclass
 class Provision:
+    """One citable unit, a section or a paragraph, with its heading and visa tags."""
+
     provision_id: str
     parent_id: str | None
     heading: str
@@ -87,6 +89,8 @@ class Provision:
 
 @dataclass(frozen=True)
 class Marker:
+    """A paragraph marker such as (i) or (A), with what it needs to place it."""
+
     label: str  # as cited: "i", "A", "21)-(29"
     italic: bool
     heading: str
@@ -95,6 +99,8 @@ class Marker:
 
 @dataclass
 class ParseReport:
+    """Everything parse_part found, plus markers it had to guess at or skip."""
+
     provisions: list[Provision]
     guesses: list[str]  # markers with no single valid reading; should stay empty
     gaps: list[str]  # markers that skipped ahead, e.g. after a removed paragraph
@@ -285,6 +291,7 @@ def _visa_types(provision_id: str) -> tuple[tuple[str, ...], str]:
 
 
 def parse_part(xml: bytes, title: str) -> ParseReport:
+    """Parse every section in one part's XML into provisions."""
     report = ParseReport([], [], [])
     for section in ET.fromstring(xml).iter("DIV8"):
         _parse_section(section, title, report)

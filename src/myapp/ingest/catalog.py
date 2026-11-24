@@ -25,6 +25,7 @@ class CatalogOutdatedError(RuntimeError):
 
 
 def catalog_path(settings: IngestSettings) -> Path:
+    """Where the catalog lives: catalog.sqlite in the data directory."""
     return settings.data_dir / "catalog.sqlite"
 
 
@@ -56,6 +57,7 @@ SCHEMA_REQUIRED = len(available())
 
 
 def schema_version(con: sqlite3.Connection) -> int:
+    """The newest migration applied, or 0 for a new catalog."""
     con.execute(
         "CREATE TABLE IF NOT EXISTS schema_migrations "
         "(version INTEGER PRIMARY KEY, name TEXT NOT NULL, applied_at TEXT NOT NULL)"
@@ -65,6 +67,7 @@ def schema_version(con: sqlite3.Connection) -> int:
 
 
 def require_current(con: sqlite3.Connection) -> None:
+    """Stop with CatalogOutdatedError if a migration is still pending."""
     have = schema_version(con)
     if have < SCHEMA_REQUIRED:
         raise CatalogOutdatedError(
@@ -119,6 +122,7 @@ def migrate(path: Path, backups: Path, source: Traversable = MIGRATIONS) -> list
 
 
 def main(argv: Sequence[str] | None = None) -> None:
+    """Apply pending migrations, or print the schema version against what code needs."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("command", choices=["migrate", "status"])
     args = parser.parse_args(argv)

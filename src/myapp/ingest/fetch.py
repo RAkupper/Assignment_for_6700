@@ -22,6 +22,8 @@ EXTENSIONS = {"xml": "xml", "json": "json", "html": "html"}
 
 @dataclass(frozen=True)
 class FetchSummary:
+    """Counts for one fetch run."""
+
     run_id: int
     accepted: int
     rejected: int
@@ -59,11 +61,13 @@ def store_raw(
 
 
 def read_raw(data_dir: Path, relative: str) -> bytes:
+    """The original bytes of a stored response, unzipped."""
     with gzip.open(data_dir / relative, "rb") as f:
         return f.read()
 
 
 def already_fetched(con: sqlite3.Connection, url: str) -> bool:
+    """Whether an accepted response for this URL is already stored."""
     row = con.execute(
         "SELECT 1 FROM fetches WHERE url = ? AND accepted = 1", (url,)
     ).fetchone()
