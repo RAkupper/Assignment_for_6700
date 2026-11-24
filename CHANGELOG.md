@@ -13,8 +13,10 @@ under the same tag. How to cut and deploy one: [docs/deployment.md](docs/deploym
   right source in the top 3 went from 15 to 17 of 20, ranked first from 13 to 15,
   and vague or off-topic questions declined from 3 to 4 of 4. "What does Form I-983
   relate to?" is now answered instead of declined, and the M-1 work rule now comes
-  first for "Can an M-1 student work while studying?". Each answer takes about 3 s
-  longer on TEAM02's 2 CPUs.
+  first for "Can an M-1 student work while studying?". Deployed on TEAM02, the full
+  test set went from 19 to 22 of 25 and the median answer from 18.4 s to 13.6 s,
+  although the reranker itself costs about 3 s of CPU per question
+  ([docs/evaluation.md](docs/evaluation.md#results)).
 - New settings `SEARCH_RERANK_MODEL` (empty turns it off), `SEARCH_RERANK_CANDIDATES`
   and `SEARCH_MIN_RERANK`. A hit's `score` is now the reranker's score.
 
