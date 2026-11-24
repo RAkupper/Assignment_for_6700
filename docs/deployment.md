@@ -341,6 +341,11 @@ behind it, so the user sees the inner layer's clear answer instead of a hung pag
 | The model call, retries included | 120 s (`LLM_TIMEOUT_S`) | the passages, `status: "model_unavailable"` |
 | Caddy waiting for the app | 200 s (`response_header_timeout` in `Caddyfile`) | "The answer took too long" (504) |
 | The page waiting for Caddy | 210 s (`ASK_LIMIT_MS` in `app.js`) | "The answer took too long" |
+| A Qdrant search or readiness check | 5 s (`QDRANT_TIMEOUT_S`; 60 s in the jobs container) | 503 with `Retry-After` |
+
+A search takes well under 0.2 s: in the evaluation runs, questions the index can't
+answer came back in 0.1 s through the whole stack, search included. 5 s gives up on a
+stuck Qdrant long before a question would wait for a model slot.
 
 The app's worst case is about 185 s: a full queue wait, then a model call that runs
 out its budget. Caddy's 200 s sits above that, so Caddy only answers 504 when the app
