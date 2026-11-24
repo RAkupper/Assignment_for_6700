@@ -25,6 +25,8 @@ database with dense (BGE) and sparse (BM25) vectors and filterable metadata. See
   limit sits)
 - [Quickstart](#quickstart) (tutorial: clean machine to running service)
 - [Deploy with Compose](#deploy-with-compose) (run everything on an instance)
+- [Runbook](docs/runbook.md) (exact commands for each routine task on TEAM02: deploy,
+  rollback, reboot, shelve, fresh install, and what you should see)
 - [Security](#security) (HTTPS, open ports, admin key, rate limits, pinning)
 - [Docker](#docker) (build, run, and check the container)
 - [Vector database (Qdrant)](#vector-database-qdrant) (collection, loading, rollback)
