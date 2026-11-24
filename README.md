@@ -789,7 +789,7 @@ Assignment_for_6700/
 
 ### Continuous integration
 
-`.github/workflows/ci.yml` runs two jobs on every push and pull request, on
+`.github/workflows/ci.yml` runs three jobs on every push and pull request, on
 `ubuntu-latest`. Each action is pinned to a commit SHA, with its version in a comment.
 
 `quality-gates`:
@@ -803,6 +803,18 @@ Assignment_for_6700/
 
 `secret-scan` checks out the full history, installs gitleaks after checking its
 release hash, and runs `gitleaks git` over every commit.
+
+`image` runs once both pass:
+
+1. Build the image as `ghcr.io/rakupper/assignment_for_6700:sha-<commit>`
+2. Smoke-test it with `scripts/smoke_image.sh`: start it on its own and check
+   `/health`, the page at `/`, `/docs`, that it runs as `appuser`, and that no
+   `.env` or `.git` is inside
+3. On a push to `main`, push it to the GitHub Container Registry. On a version tag
+   such as `v0.2.0`, also push it under that tag. Pull requests stop after step 2.
+   The run's summary shows the pushed image's digest.
+
+To smoke-test an image on your own machine: `docker build -t local . && scripts/smoke_image.sh local`.
 
 A failure at any step fails the run. See results under the repository's
 **Actions** tab.
