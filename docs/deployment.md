@@ -379,13 +379,68 @@ Qwen2.5-1.5B Q4_K_M, the real 8 CFR 214 index, and the page in Chrome:
 `scripts/smoke_rag.py` passed on the healthy stack (13.4 s) and failed with llm
 stopped, so an evidence-only answer can't pass for a working one.
 
+## Release and deploy
+
+TEAM02 runs released images from the GitHub Container Registry, not code built on
+the instance. A release is a version in `pyproject.toml`, a Git tag, and the image
+CI publishes under that tag.
+
+### Cut a release (on your laptop)
+
+1. In a pull request, set the new version in `pyproject.toml` (`0.2.0` → `0.3.0`,
+   following [semantic versioning](https://semver.org)), run `uv lock`, and add a
+   section to `CHANGELOG.md` saying what changed for users. Merge it.
+2. Tag the merge commit on `main` and push the tag:
+
+   ```bash
+   git switch main && git pull
+   git tag v0.3.0
+   git push origin v0.3.0
+   ```
+
+3. Wait for the CI run on the tag (Actions tab). It fails if the tag doesn't match
+   `pyproject.toml`, and its summary shows the digest it published.
+
+### Deploy it, or roll back (on TEAM02)
+
+The same command does both: give it the version to run.
+
+```bash
+cd ~/Assignment_for_6700
+scripts/deploy.sh v0.3.0   # deploy
+scripts/deploy.sh v0.2.0   # roll back to the release before
+```
+
+It checks out the tag (so `compose.yml` and the `Caddyfile` match the image), pulls the
+image, pins its digest in `.env` as `APP_IMAGE`, runs pending catalog migrations
+(each backs the catalog up first), starts the stack, waits for `/ready`, checks that
+`/health` reports the version, and runs the evaluation set (about 10 minutes;
+`SKIP_EVAL=1` skips it). When it worked, the last line says
+`deployed v0.3.0: eval 19/25`, and `deploy.log` gets a line like:
+
+```text
+2026-11-24T20:15:02Z v0.3.0 ghcr.io/rakupper/assignment_for_6700@sha256:eb14b8b1... ok eval 19/25
+```
+
+When a check fails, it writes a `failed` line with the reason, prints the app's last
+log lines, and tells you which version to roll back to. The checkout stays on the
+tag (a detached HEAD), which is expected: deploy with the script, not `git pull`.
+
+`APP_IMAGE` in `.env` is what makes a release stick: restarts, reboots and a plain
+`docker compose up -d` all use that digest. Without it, Compose builds the image from
+the checkout. That is how you try an unreleased branch: delete the `APP_IMAGE` line
+from `.env`, then `git switch <branch> && docker compose up -d --build`. Run
+`scripts/deploy.sh` again afterwards to get back to a release.
+
 ## Everyday commands (on the instance, in `~/Assignment_for_6700`)
 
 | Task | Command |
 | --- | --- |
 | Status and health | `docker compose ps` |
 | Follow the logs | `docker compose logs -f app` (or `llm`) |
-| Pull new code and rebuild the app | `git pull && docker compose up -d --build` |
+| Deploy a release, or roll back to an older one | `scripts/deploy.sh v0.2.0` |
+| Which releases ran, and how they did | `cat deploy.log` |
+| Try an unreleased branch | `git switch <branch> && docker compose up -d --build`, after removing `APP_IMAGE` from `.env` |
 | Stop the stack (keeps the model volume) | `docker compose down` |
 | Disk usage | `docker system df`, `df -h /` and `df -h /media/volume/team02-data` |
 | Qdrant collections and point counts | `docker compose run --rm jobs python -m myapp.vectordb.collection status` |

@@ -1,5 +1,7 @@
 """Tests for the health endpoint."""
 
+from importlib.metadata import version
+
 from fastapi.testclient import TestClient
 
 from myapp.app import HealthResponse, app
@@ -18,3 +20,8 @@ def test_health_returns_ok() -> None:
 def test_health_reports_app_version() -> None:
     """The payload carries the running application version."""
     assert client.get("/health").json()["version"] == app.version
+
+
+def test_version_comes_from_pyproject() -> None:
+    """/health reports the installed package version, so a release needs one edit."""
+    assert client.get("/health").json()["version"] == version("assignment-1")

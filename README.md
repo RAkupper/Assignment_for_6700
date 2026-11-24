@@ -806,7 +806,8 @@ release hash, and runs `gitleaks git` over every commit.
 
 `image` runs once both pass:
 
-1. Build the image as `ghcr.io/rakupper/assignment_for_6700:sha-<commit>`
+1. Build the image as `ghcr.io/rakupper/assignment_for_6700:sha-<commit>`. On a
+   version tag, first check that the tag matches the version in `pyproject.toml`
 2. Smoke-test it with `scripts/smoke_image.sh`: start it on its own and check
    `/health`, the page at `/`, `/docs`, that it runs as `appuser`, and that no
    `.env` or `.git` is inside

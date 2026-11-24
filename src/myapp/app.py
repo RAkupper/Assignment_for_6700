@@ -4,6 +4,7 @@ import asyncio
 import secrets
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
+from importlib.metadata import version
 from pathlib import Path
 from typing import Annotated, Literal
 
@@ -52,7 +53,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(
-    title=settings.name, version="0.1.0", debug=settings.debug, lifespan=lifespan
+    title=settings.name,
+    version=version("assignment-1"),  # the one place it is set: pyproject.toml
+    debug=settings.debug,
+    lifespan=lifespan,
 )
 web_dir = Path(__file__).with_name("web")
 app.mount("/assets", StaticFiles(directory=web_dir), name="assets")
