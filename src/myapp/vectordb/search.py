@@ -20,7 +20,12 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from qdrant_client import QdrantClient, models
 
 from myapp.vectordb.collection import DENSE, SPARSE, QdrantSettings, get_client
-from myapp.vectordb.encoders import EmbeddingSettings, Encoded, Encoder
+from myapp.vectordb.encoders import (
+    CrossEncoderReranker,
+    EmbeddingSettings,
+    Encoded,
+    Encoder,
+)
 
 
 class SearchSettings(BaseSettings):
@@ -35,7 +40,12 @@ class SearchSettings(BaseSettings):
     )
     k: int = Field(default=3, gt=0)
     candidate_k: int = Field(default=50, gt=0)  # per branch, before fusion
-    min_relevance: float = Field(default=0.65, ge=-1.0, le=1.0)  # tuned, see README
+    min_relevance: float = Field(default=0.65, ge=-1.0, le=1.0)  # without a reranker
+    # A cross-encoder rereads the fused candidates with the question and decides
+    # relevance instead of the dense cosine alone. "" turns it off (#57).
+    rerank_model: str = "Xenova/ms-marco-MiniLM-L-6-v2"
+    rerank_candidates: int = Field(default=20, gt=0, le=100)
+    min_rerank: float = Field(default=-1.0, ge=-20.0, le=20.0)  # tuned on the test set
 
 
 class QueryEncoder(Protocol):
@@ -43,6 +53,13 @@ class QueryEncoder(Protocol):
 
     def embed_query(self, text: str) -> Encoded:
         """Encode a question for search."""
+
+
+class Reranker(Protocol):
+    """What the searcher needs from a reranker; tests pass a fake."""
+
+    def rerank(self, query: str, documents: Sequence[str]) -> list[float]:
+        """One score per document, higher is more relevant."""
 
 
 class Hit(BaseModel):
@@ -55,7 +72,7 @@ class Hit(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     provision_id: str  # the exact citation
-    score: float  # RRF rank score: compare within one result list only
+    score: float  # reranker score, or RRF without one: compare within one list only
     relevance: float  # dense cosine to the question: comparable across questions
     heading_path: str
     parent_text: str  # the parent's lead-in, e.g. "...is admitted if:"
@@ -116,22 +133,28 @@ class Searcher:
         encoder: QueryEncoder,
         collection: str,
         settings: SearchSettings | None = None,
+        reranker: Reranker | None = None,
     ) -> None:
-        """Search `collection`, normally the alias, with these settings."""
+        """Search `collection`, normally the alias; rerank when given a reranker."""
         self.client = client
         self.encoder = encoder
         self.collection = collection  # the alias, so a rollback needs no restart
         self.settings = settings or SearchSettings()
+        self.reranker = reranker
 
     @classmethod
     def from_settings(cls) -> "Searcher":
         """Connect and load the models from environment settings."""
         settings = QdrantSettings()
+        embedding = EmbeddingSettings()
+        search = SearchSettings()
+        reranker = (
+            CrossEncoderReranker(search.rerank_model, embedding.cache_dir)
+            if search.rerank_model
+            else None
+        )
         return cls(
-            get_client(settings),
-            Encoder(EmbeddingSettings()),
-            settings.alias,
-            SearchSettings(),
+            get_client(settings), Encoder(embedding), settings.alias, search, reranker
         )
 
     def search(
@@ -144,15 +167,22 @@ class Searcher:
         include_proposed: bool = False,
         min_relevance: float | None = None,
     ) -> list[Hit]:
-        """Top `k` provisions for `query`, dense and BM25 fused with RRF.
+        """Top `k` provisions for `query`: dense and BM25 fused with RRF, then reranked.
 
-        Hits below `min_relevance` are dropped, so an empty list means nothing in
-        the rules is close enough to answer from.
+        With a reranker, hits scoring below `min_rerank` are dropped; without one,
+        hits below `min_relevance`. Passing `min_relevance` applies it either way.
+        An empty list means nothing in the rules is close enough to answer from.
         """
         if not query.strip():
             return []
         k = k or self.settings.k
-        cutoff = self.settings.min_relevance if min_relevance is None else min_relevance
+        if min_relevance is not None:
+            cutoff = min_relevance
+        elif self.reranker is not None:
+            cutoff = -1.0  # every cosine passes; the reranker decides
+        else:
+            cutoff = self.settings.min_relevance
+        fused = max(k, self.settings.rerank_candidates) if self.reranker else k
         limit = self.settings.candidate_k
         q = self.encoder.embed_query(query)
         where = build_filter(as_of, visa_type, sources, include_proposed)
@@ -166,12 +196,24 @@ class Searcher:
             ],
             query=models.FusionQuery(fusion=models.Fusion.RRF),
             query_filter=where,
-            limit=k,
+            limit=fused,
             with_payload=True,
             with_vectors=[DENSE],
         )
         hits = [_hit(p, _cosine(q.dense, _dense_of(p)), as_of) for p in result.points]
-        return [h for h in hits if h.relevance >= cutoff]
+        hits = [h for h in hits if h.relevance >= cutoff]
+        if self.reranker is None or not hits:
+            return hits[:k]
+        scores = self.reranker.rerank(query, [_passage(h) for h in hits])
+        ranked = sorted(zip(scores, hits, strict=True), key=lambda p: -p[0])
+        floor = self.settings.min_rerank
+        return [
+            h.model_copy(update={"score": round(s, 4)}) for s, h in ranked if s >= floor
+        ][:k]
+
+
+def _passage(hit: Hit) -> str:
+    return f"{hit.parent_text} {hit.text}".strip()  # the lead-in, as it was embedded
 
 
 def _dense_of(point: models.ScoredPoint) -> list[float]:
@@ -241,7 +283,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     )
     for h in hits:
         print(
-            f"rel {h.relevance:.3f}  rrf {h.score:.3f}  {h.provision_id}  "
+            f"rel {h.relevance:.3f}  score {h.score:.3f}  {h.provision_id}  "
             f"[{h.authority}, {h.status}]"
         )
         print(f"       {h.text[:150]}")
