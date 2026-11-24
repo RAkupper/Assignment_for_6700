@@ -38,13 +38,18 @@ class QdrantSettings(BaseSettings):
     url: HttpUrl | None = HttpUrl("http://localhost:6333")  # None means in-memory
     api_key: SecretStr | None = None
     alias: str = Field(default="provisions", min_length=1)  # the name the app queries
+    # Every request to Qdrant gives up after this many seconds. A search takes well
+    # under 0.2 s on TEAM02, so 5 s fails fast on a stuck Qdrant; jobs, which write
+    # in bulk and take snapshots, get 60 s from compose.yml.
+    timeout_s: int = Field(default=5, ge=1, le=300)
 
 
 def get_client(settings: QdrantSettings) -> QdrantClient:
+    """Connect to the configured Qdrant, or an in-memory one when no URL is set."""
     if settings.url is None:
         return QdrantClient(location=":memory:")
     key = settings.api_key.get_secret_value() if settings.api_key else None
-    return QdrantClient(url=str(settings.url), api_key=key)
+    return QdrantClient(url=str(settings.url), api_key=key, timeout=settings.timeout_s)
 
 
 def versioned_name(alias: str, version: int) -> str:

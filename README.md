@@ -609,6 +609,7 @@ does not fail when only the model does: it returns the retrieved passages with
 | `QDRANT_URL` | `http://localhost:6333` | Qdrant server; must be a valid URL. Under Compose this will be `http://qdrant:6333`. |
 | `QDRANT_API_KEY` | unset | Kept secret in logs and reprs. |
 | `QDRANT_ALIAS` | `provisions` | The name the app queries; versioned collections are `<alias>_v<N>`. |
+| `QDRANT_TIMEOUT_S` | `5` | Seconds before any request to Qdrant gives up (1 to 300). The jobs container uses 60 for bulk loads and snapshots (`QDRANT_JOBS_TIMEOUT_S`). |
 
 `EmbeddingSettings` in `src/myapp/vectordb/encoders.py` reads the `EMBED_` prefix.
 Changing the model is a setting change plus a rebuild into a new collection version.

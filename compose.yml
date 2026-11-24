@@ -137,6 +137,7 @@ services:
         required: false
     environment:
       QDRANT_URL: ${QDRANT_URL:-http://qdrant:6333}
+      QDRANT_TIMEOUT_S: ${QDRANT_JOBS_TIMEOUT_S:-60}  # bulk upserts and snapshots
       INGEST_DATA_DIR: /data
       EMBED_CACHE_DIR: /embed-cache
     volumes:
