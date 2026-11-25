@@ -3,7 +3,6 @@
 Only model inference is fake; there are no model downloads or external services.
 """
 
-import json
 import threading
 import warnings
 from collections.abc import Iterator
@@ -22,6 +21,7 @@ from myapp.generation.service import (
     MODEL_UNAVAILABLE,
     GenerationService,
     GenerationSettings,
+    visa_notes,
 )
 from myapp.model_client import (
     EchoModelClient,
@@ -131,10 +131,11 @@ def test_ask_retrieves_and_sends_evidence_to_existing_llm(
     assert body["sources"][0]["provision_id"] == "TEST-1"
     assert "relevance" in body["sources"][0]
     assert "is_demo" not in body
-    evidence = json.loads(model.prompts[0].split("Evidence JSON: ", 1)[1])
-    assert evidence[0]["citation"] == "[1]"
-    assert evidence[0]["text"] == body["sources"][0]["text"]
-    assert "Current fixture" in evidence[0]["text"]
+    prompt = model.prompts[0]
+    assert "[1] TEST-1 (" in prompt
+    assert f"Text: {body['sources'][0]['text']}" in prompt
+    assert "Current fixture" in prompt
+    assert prompt.rstrip().endswith('Question: "Form I-983"\nAnswer:')
 
 
 def test_uncited_answer_is_returned_without_retry_or_rejection(
@@ -162,8 +163,7 @@ def test_parent_context_reaches_generation_prompt(
     client, model = api
     response = client.post("/ask", json={"question": "Form I-983", "k": 1})
     assert response.status_code == 200
-    evidence = json.loads(model.prompts[0].split("Evidence JSON: ", 1)[1])
-    assert evidence[0]["parent_text"] == lead
+    assert f"Lead-in: {lead}" in model.prompts[0]
     assert response.json()["sources"][0]["parent_text"] == lead
 
 
@@ -185,7 +185,7 @@ def test_retrieve_and_ask_share_filters_and_historical_results(
     response = client.post("/ask", json=request)
     assert response.json()["sources"] == retrieved.json()
     assert "Requested date: 2023-06-01" in model.prompts[0]
-    assert "status_today" in model.prompts[0]
+    assert "status today:" in model.prompts[0]
 
 
 def test_proposals_are_opt_in_and_labeled_in_prompt(
@@ -223,10 +223,8 @@ def test_excerpt_budget_matches_sources_returned_to_user(
     generation.settings.max_context_chars = 20
     model = FakeModelClient()
     result = generation.ask(QuestionRequest(question="Form I-983", k=1), model)
-    evidence = json.loads(model.prompts[0].split("Evidence JSON: ", 1)[1])
     assert len(result.sources[0].text) == 20
-    assert evidence[0]["excerpt_truncated"] is True
-    assert evidence[0]["text"] == result.sources[0].text
+    assert f"Text: {result.sources[0].text} [excerpt truncated]" in model.prompts[0]
 
 
 @pytest.mark.parametrize(
@@ -635,3 +633,40 @@ def test_not_covered_answer_does_not_wait_for_a_busy_slot(
         finally:
             release.set()
         assert first.result(timeout=5).status_code == 200
+
+
+@pytest.mark.parametrize(
+    ("question", "visa_type", "expected"),
+    [
+        ("Can an F-4 visa holder apply for STEM OPT?", "F-1", "F-4, which is not"),
+        ("Can a J3 work?", None, "J-3, which is not"),
+        ("Can an M-1 student work?", "F-1", "asks about M-1; answer for M-1"),
+    ],
+)
+def test_visa_notes_flag_classes_the_model_would_guess_about(
+    question: str, visa_type: str | None, expected: str
+) -> None:
+    assert any(expected in note for note in visa_notes(question, visa_type))
+
+
+@pytest.mark.parametrize(
+    "question",
+    [
+        "Do I need an I-20 and Form I-983?",
+        "Can I switch from F-1 to H-1B?",
+        "Can an F-3 border commuter work?",
+        "Can my F-2 spouse study?",
+    ],
+)
+def test_visa_notes_leave_real_classes_and_forms_alone(question: str) -> None:
+    assert not any("not a visa class" in n for n in visa_notes(question, "F-1"))
+
+
+def test_prompt_states_the_asker_visa_and_numbers_every_source(
+    api: tuple[TestClient, FakeModelClient],
+) -> None:
+    client, model = api
+    client.post("/ask", json={"question": "student employment", "visa_type": "F-1"})
+    prompt = model.prompts[0]
+    assert "The asker's visa, chosen on the page: F-1." in prompt
+    assert "End every sentence with the number of the source" in prompt

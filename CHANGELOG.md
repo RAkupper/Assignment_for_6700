@@ -4,6 +4,20 @@ What changed for users in each release. The version lives in `pyproject.toml`;
 each release is a Git tag (`v0.2.0`) and an image in the GitHub Container Registry
 under the same tag. How to cut and deploy one: [docs/deployment.md](docs/deployment.md#release-and-deploy).
 
+## 0.5.0
+
+### Changed
+- Answers cite their sources inline: each sentence ends with [1], [2] for the
+  passage it comes from. The prompt now lists the evidence as numbered passages
+  instead of a JSON block, asks for 2 to 4 sentences with every relevant source,
+  and puts the question last (#57, cause 4).
+- The prompt states the visa chosen on the page, and the app flags F, M or J
+  classes that do not exist (an "F-4" question) so the model says so instead of
+  answering yes (#47.10).
+- Measured on the test set with the same model and data: inline citations 0 to 19
+  of 20 answers, all cases 22 to 23 of 25 (f4-stem-opt now passes), no case
+  regressed. Answers are a sentence or two longer, about 2 s more each.
+
 ## 0.4.0
 
 ### Changed
