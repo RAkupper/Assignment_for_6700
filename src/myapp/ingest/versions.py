@@ -6,7 +6,6 @@ the catalog never holds a half-applied run.
 """
 
 import json
-import logging
 import sqlite3
 from collections.abc import Iterator
 from dataclasses import dataclass
@@ -14,10 +13,10 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Protocol
 
+from loguru import logger
+
 from myapp.ingest.fetch import read_raw
 from myapp.ingest.schema import RawDocument, Record, SourceName
-
-log = logging.getLogger(__name__)
 
 
 class Parser(Protocol):
@@ -233,8 +232,8 @@ def parse(
                 con, run_id, snap, records, prefix, snap.day <= baseline_day
             )
             totals = [a + b for a, b in zip(totals, counts, strict=True)]
-            log.info(
-                "snapshot %s: %d added, %d modified, %d removed", snap.day, *counts
+            logger.info(
+                "snapshot {}: {} added, {} modified, {} removed", snap.day, *counts
             )
         con.commit()
         status = "succeeded"

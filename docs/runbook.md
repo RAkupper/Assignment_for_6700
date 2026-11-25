@@ -89,6 +89,20 @@ docker compose run --rm jobs python -m myapp.evaluation --base-url http://app:80
 
 It should end with `| All cases passed | 19/25 (76%) |` or better.
 
+For how things are going over time, open the Grafana dashboard through an SSH
+tunnel ([observability.md](observability.md#prometheus-and-grafana)):
+
+```bash
+ssh -L 3000:127.0.0.1:3000 exouser@team02.cis240466.projects.jetstream-cloud.org
+```
+
+To follow one failed request, take the `X-Request-ID` from its response (the
+browser's network tab shows it) and search the logs:
+
+```bash
+docker compose logs app | grep '"request_id": "<id>"'
+```
+
 ## Deploy a release
 
 A release is a version in `pyproject.toml`, a Git tag and the image CI publishes

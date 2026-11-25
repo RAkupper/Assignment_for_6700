@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "assignment-1"
-version = "0.5.0"
+version = "0.6.0"
 description = "RAG question answering on U.S. immigration rules for international students"
 readme = "README.md"
 requires-python = ">=3.13"
@@ -13,6 +13,8 @@ dependencies = [
     "fastapi>=0.141.1",
     "fastembed>=0.9.1",
     "httpx2>=2.13.0",
+    "loguru>=0.7.3",
+    "prometheus-client>=0.26.0",
     "pydantic-settings>=2.15.0",
     "qdrant-client>=1.20.0",
     "uvicorn>=0.53.0",
@@ -42,7 +44,10 @@ line-length = 88
 target-version = "py313"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B"]
+select = ["E", "F", "I", "UP", "B", "T20"]  # T20: no print(); log with loguru
+
+[tool.ruff.lint.per-file-ignores]
+"scripts/**" = ["T20"]  # one-off benchmarks print their numbers
 
 # Static type checking
 [tool.mypy]

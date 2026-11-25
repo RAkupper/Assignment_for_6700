@@ -82,4 +82,4 @@ controller and cert-manager.
 | Cross-encoder reranker over fused results (0.4.0) | Right provision first more often; 19/25 to 22/25 on the evaluation set (#73) |
 | Numbered evidence and per-sentence citations in the prompt (0.5.0) | Answers cite the source they use; 23/25 locally |
 | Caddy waits for a healthy app; static files cached per release | No 502s during startup; repeat visits load faster without serving old code |
-| JSON logs, `/metrics` with Grafana | In progress (#60) |
+| JSON logs with request IDs, `/metrics`, Prometheus and Grafana, an `/ask` SLO | See one request end to end and whether answers are good and fast enough ([observability.md](observability.md), #60) |

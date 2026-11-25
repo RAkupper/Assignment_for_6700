@@ -2,6 +2,7 @@
 
 import asyncio
 import secrets
+import time
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from importlib.metadata import version
@@ -9,9 +10,11 @@ from pathlib import Path
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request, Response
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
 from fastapi.security import APIKeyHeader
 from fastapi.staticfiles import StaticFiles
+from loguru import logger
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from pydantic import BaseModel, ConfigDict, Field
 
 from myapp.config import Settings
@@ -25,11 +28,24 @@ from myapp.model_client import (
     ModelUnavailableError,
     build_model_client,
 )
+from myapp.observability import (
+    ANSWERS,
+    ASK_SLO_EVENTS,
+    ASK_SLO_SECONDS,
+    REQUEST_ID_HEADER,
+    REQUEST_SECONDS,
+    REQUESTS,
+    new_request_id,
+    request_id,
+    route_label,
+    setup_logging,
+)
 from myapp.ratelimit import SlidingWindowLimiter
 from myapp.vectordb.search import Hit
 
 settings = Settings()
 generation_settings = GenerationSettings()
+setup_logging(settings.log_json, settings.log_level)
 
 
 @asynccontextmanager
@@ -80,6 +96,68 @@ async def no_store_private(
             "public, max-age=31536000, immutable" if versioned else "no-cache"
         )
     return response
+
+
+QUIET_ROUTES = {"/health", "/metrics"}  # polled every few seconds; counted, not logged
+GOOD_ANSWERS = {"answered", "insufficient_evidence"}
+
+
+@app.middleware("http")
+async def observe(
+    request: Request, call_next: Callable[[Request], Awaitable[Response]]
+) -> Response:
+    """Give each request an ID, then count it and log one line once it is answered.
+
+    The line names the route, status and duration, and for /ask the answer's
+    outcome; never the question, the answer or any header but the request ID.
+    """
+    rid = new_request_id(request.headers.get(REQUEST_ID_HEADER))
+    token = request_id.set(rid)
+    started = time.perf_counter()
+    status = 500  # an exception that escapes every handler
+    try:
+        response = await call_next(request)
+        status = response.status_code
+        response.headers[REQUEST_ID_HEADER] = rid
+        return response
+    finally:
+        seconds = time.perf_counter() - started
+        matched = request.scope.get("route")
+        route = route_label(getattr(matched, "path", None), request.url.path)
+        REQUESTS.labels(route, str(status)).inc()
+        REQUEST_SECONDS.labels(route).observe(seconds)
+        outcome = getattr(request.state, "answer_status", None)
+        if route == "/ask":
+            _count_ask(status, outcome, seconds)
+        if route not in QUIET_ROUTES:
+            logger.bind(
+                method=request.method,
+                route=route,
+                status=status,
+                duration_ms=round(seconds * 1000),
+                answer_status=outcome,
+            ).log("WARNING" if status >= 500 else "INFO", "request")
+        request_id.reset(token)
+
+
+def _count_ask(status: int, outcome: str | None, seconds: float) -> None:
+    """Count the answer's outcome and judge the request against the /ask SLO.
+
+    Client errors (bad input, rate limits) are left out of the SLO: they say
+    nothing about whether the service works.
+    """
+    if outcome is not None:
+        ANSWERS.labels(outcome).inc()
+    if 400 <= status < 500:
+        return
+    good = status < 400 and outcome in GOOD_ANSWERS and seconds <= ASK_SLO_SECONDS
+    ASK_SLO_EVENTS.labels(str(good).lower()).inc()
+
+
+@app.get("/metrics", include_in_schema=False)
+def metrics() -> PlainTextResponse:
+    """Prometheus metrics. Caddy does not forward this path, so it is not public."""
+    return PlainTextResponse(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
 @app.get("/", include_in_schema=False)
@@ -252,12 +330,15 @@ def retrieve(
     responses={429: {"model": ErrorResponse}},
 )
 def ask(
+    request: Request,
     body: QuestionRequest,
     generation: Annotated[GenerationService, Depends(get_generation_service)],
     model: Annotated[ModelClient, Depends(get_model_client)],
 ) -> Answer:
     """Retrieve evidence and generate an answer in FastAPI's worker thread."""
-    return generation.ask(body, model)
+    answer = generation.ask(body, model)
+    request.state.answer_status = answer.status  # read by observe for the metrics
+    return answer
 
 
 admin_key = APIKeyHeader(name="X-Admin-Key", auto_error=False)

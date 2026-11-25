@@ -1,0 +1,35 @@
+# The /ask SLO (docs/observability.md): 95% of /ask requests get a written or
+# not-covered answer, without a server error, within 30 s, over 7 days.
+groups:
+  - name: ask-slo
+    rules:
+      - record: app:ask_slo_good_ratio:rate5m
+        expr: sum(rate(app_ask_slo_events_total{good="true"}[5m])) / sum(rate(app_ask_slo_events_total[5m]))
+      - record: app:ask_slo_good_ratio:rate1h
+        expr: sum(rate(app_ask_slo_events_total{good="true"}[1h])) / sum(rate(app_ask_slo_events_total[1h]))
+      - record: app:ask_slo_good_ratio:rate7d
+        expr: sum(increase(app_ask_slo_events_total{good="true"}[7d])) / sum(increase(app_ask_slo_events_total[7d]))
+      # Burning the 7-day budget 6 times too fast: at this rate it is gone in about a day.
+      - alert: AskSLOBurningFast
+        expr: (1 - app:ask_slo_good_ratio:rate1h) > 6 * 0.05 and (1 - app:ask_slo_good_ratio:rate5m) > 6 * 0.05
+        labels:
+          severity: page
+        annotations:
+          summary: More than 30% of /ask requests failed or took over 30 s in the last hour
+          runbook: docs/runbook.md
+  - name: up
+    rules:
+      - alert: AppDown
+        expr: up{job="app"} == 0
+        for: 2m
+        labels:
+          severity: page
+        annotations:
+          summary: Prometheus cannot reach the app
+      - alert: ModelServerDown
+        expr: up{job="llm"} == 0
+        for: 5m
+        labels:
+          severity: page
+        annotations:
+          summary: Prometheus cannot reach llama.cpp; /ask answers with passages only

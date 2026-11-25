@@ -1,6 +1,7 @@
 # Service stack: the FastAPI app, the model server it calls over HTTP, and the
 # Qdrant vector database, with generation enabled for /ask. With
-# COMPOSE_PROFILES=proxy, Caddy serves the app over HTTPS at APP_DOMAIN.
+# COMPOSE_PROFILES=proxy, Caddy serves the app over HTTPS at APP_DOMAIN; with
+# monitoring, Prometheus and Grafana run too (docs/observability.md).
 # How to start, check and troubleshoot it on Jetstream2:
 # docs/deployment.md
 #
@@ -35,6 +36,7 @@ services:
       - ${LLM_CTX_SIZE:-8192}
       - -np
       - ${LLM_PARALLEL:-2}
+      - --metrics  # /metrics for Prometheus: busy slots, queue, tokens per second
     environment:
       LLAMA_CACHE: /models
     volumes:
@@ -124,6 +126,46 @@ services:
         condition: service_healthy  # no 502s while the app loads its models
     restart: unless-stopped
 
+  # Scrapes app, llm and qdrant every 15 s and keeps 30 days. No published port:
+  # Grafana reads it over the Compose network.
+  prometheus:
+    image: quay.io/prometheus/prometheus:v3.16.0@sha256:9332054523223e2ddc18d8101799d54a4a8d823b030c53216f063a6c117773cd
+    profiles: [monitoring]
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=30d
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/rules.yml:/etc/prometheus/rules.yml:ro
+      - prometheus-data:/prometheus
+    mem_limit: 512m
+    restart: unless-stopped
+
+  # The dashboard, on this machine only: ssh -L 3000:127.0.0.1:3000, then
+  # http://localhost:3000. Viewing needs no login; changing it needs the admin one.
+  grafana:
+    image: grafana/grafana:13.3.2@sha256:81556409ba48b2b922e0adb69a2511337d8ba7578f11962eefa6149a2d815101
+    profiles: [monitoring]
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /etc/grafana/dashboards/rag-service.json
+    ports:
+      - "127.0.0.1:3000:3000"  # never public; reach it through an SSH tunnel
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/etc/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    mem_limit: 256m
+    restart: unless-stopped
+
   # One-off ingestion and loading tasks, never started by "docker compose up":
   #   docker compose run --rm jobs python -m myapp.ingest fetch --part "8 CFR 214"
   # Same image as the app, plus write access to /data.
@@ -164,3 +206,5 @@ volumes:
   embed-cache:  # BGE and BM25 models; rebuilt on demand if lost
   caddy-data:
   caddy-config:
+  prometheus-data:  # 30 days of metrics; losing it loses history, nothing else
+  grafana-data:

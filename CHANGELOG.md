@@ -4,16 +4,32 @@ What changed for users in each release. The version lives in `pyproject.toml`;
 each release is a Git tag (`v0.2.0`) and an image in the GitHub Container Registry
 under the same tag. How to cut and deploy one: [docs/deployment.md](docs/deployment.md#release-and-deploy).
 
-## Unreleased
+## 0.6.0
+
+### Added
+- Logs are JSON lines through loguru, one `request` line per request with its route,
+  status and time, plus `retrieval` and `model call` lines with passages, model,
+  time and tokens. Questions, answers, keys and client addresses are never logged.
+- Every response has an `X-Request-ID`; every log line for that request carries it.
+- `/metrics` for Prometheus: requests, failures and time per route, `/ask` outcomes
+  (including the empty-retrieval rate), model call time and failures, tokens per
+  answer, retrieval time. Caddy does not serve it.
+- A `monitoring` Compose profile with Prometheus and Grafana, neither public, and a
+  provisioned dashboard. llama.cpp now exposes its own metrics.
+- An SLO for `/ask`: 95% of requests over 7 days answered without a server error
+  within 30 s, with recording rules and burn-rate alerts
+  ([observability.md](docs/observability.md)).
 
 ### Changed
-- The page and its scripts are cached per release: `/assets/app.js?v=0.5.0` is kept
+- The page and its scripts are cached per release: `/assets/app.js?v=0.6.0` is kept
   for a year, the page itself is revalidated on every visit, and answers stay
   `no-store`. A new release loads new code without a hard refresh.
 - Caddy starts only once the app is healthy, so the first visits after a deploy get
   the page instead of a 502.
 - Network failures on the page say "Could not reach the service" in every browser
   (Chrome's "Failed to fetch", Safari's "Load failed" and "Fetch is aborted").
+- `print` is gone from `src/`: command-line tools log through loguru too, and ruff's
+  `T20` rule keeps it that way. The unused `myapp.main` placeholder is removed.
 
 ## 0.5.0
 

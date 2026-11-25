@@ -10,7 +10,6 @@ TEAM02 and any one laptop. Run inside the jobs container:
 
 import argparse
 import hashlib
-import logging
 import sqlite3
 import tarfile
 import tempfile
@@ -21,11 +20,13 @@ from pathlib import Path
 from typing import Any
 
 import httpx2
+from loguru import logger
 from pydantic import BaseModel, Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from myapp.config import IngestSettings
 from myapp.ingest.catalog import backup as backup_catalog
+from myapp.observability import setup_logging
 from myapp.vectordb.collection import (
     QdrantSettings,
     current_target,
@@ -46,8 +47,6 @@ NOT_PACKED = {
     f"{CATALOG}-journal",
     "backups",
 }
-
-log = logging.getLogger(__name__)
 
 
 class BackupError(RuntimeError):
@@ -436,9 +435,7 @@ def main(argv: Sequence[str] | None = None) -> None:
         "--no-activate", action="store_true", help="leave the alias alone"
     )
     args = parser.parse_args(argv)
-    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
-    for noisy in ("httpx", "httpx2"):  # one line per request otherwise
-        logging.getLogger(noisy).setLevel(logging.WARNING)
+    setup_logging(json_lines=False)
 
     settings = BackupSettings()
     releases = Releases(settings)
@@ -446,7 +443,7 @@ def main(argv: Sequence[str] | None = None) -> None:
         if args.command == "list":
             for r in releases.published():
                 sizes = sum(a["size"] for a in r["assets"]) // 1_000_000
-                print(f"{r['tag_name']}  {sizes} MB  {r['html_url']}")
+                logger.info("{}  {} MB  {}", r["tag_name"], sizes, r["html_url"])
             return
         data_dir = IngestSettings().data_dir
         collections = Collections(QdrantSettings())
@@ -459,28 +456,28 @@ def main(argv: Sequence[str] | None = None) -> None:
                     folder = args.out or work
                     folder.mkdir(parents=True, exist_ok=True)
                     manifest = create(folder, data_dir, collections)
-                    log.info(
-                        "backed up %s (%d points)", manifest.collection, manifest.points
+                    logger.info(
+                        "backed up {} ({} points)", manifest.collection, manifest.points
                     )
                     if args.upload:
                         tag = f"{settings.tag_prefix}{datetime.now(UTC):%Y%m%dT%H%M%SZ}"
                         body = f"```json\n{manifest.model_dump_json(indent=2)}\n```"
                         names = [CATALOG, FILES, SNAPSHOT, MANIFEST]
-                        log.info(
-                            "published %s", releases.publish(tag, folder, names, body)
+                        logger.info(
+                            "published {}", releases.publish(tag, folder, names, body)
                         )
                         for gone in releases.prune(settings.keep):
-                            log.info("pruned %s", gone)
+                            logger.info("pruned {}", gone)
                     return
                 folder = args.from_dir or work
                 if args.from_dir is None:
                     release = releases.find(args.tag)
-                    log.info("downloading %s", release["tag_name"])
+                    logger.info("downloading {}", release["tag_name"])
                     releases.download(release, work)
                 for line in restore(
                     folder, data_dir, collections, not args.no_activate
                 ):
-                    log.info(line)
+                    logger.info(line)
         except BackupError as exc:
             raise SystemExit(f"error: {exc}") from exc
         finally:

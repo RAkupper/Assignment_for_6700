@@ -6,7 +6,6 @@ Run as a one-off task, never at app startup:
 
 import argparse
 import json
-import logging
 import sqlite3
 import uuid
 from collections.abc import Iterator, Sequence
@@ -17,10 +16,12 @@ from itertools import islice
 from pathlib import Path
 from typing import Any, Protocol
 
+from loguru import logger
 from qdrant_client import QdrantClient, models
 
 from myapp.config import IngestSettings
 from myapp.ingest.catalog import catalog_path
+from myapp.observability import setup_logging
 from myapp.vectordb.collection import (
     DENSE,
     SPARSE,
@@ -33,8 +34,6 @@ from myapp.vectordb.collection import (
     versioned_name,
 )
 from myapp.vectordb.encoders import EmbeddingSettings, Encoded, Encoder
-
-log = logging.getLogger(__name__)
 
 POINT_NAMESPACE = uuid.UUID("5b6f2c1e-6f1a-4b8e-9a8e-2f6d1c3b7a90")  # never change
 
@@ -168,7 +167,7 @@ def load(
         ]
         client.upsert(collection, points=points, wait=True)
         total += len(points)
-        log.info("upserted %d points (%d total)", len(points), total)  # counts only
+        logger.info("upserted {} points ({} total)", len(points), total)  # counts only
     return total
 
 
@@ -194,10 +193,10 @@ def build(
         client.delete_collection(name)  # empty or partial, and not live
     create_collection(client, name, encoder.dim)
     total = load(client, encoder, catalog, name)
-    log.info("loaded %d points into %s", total, name)
+    logger.info("loaded {} points into {}", total, name)
     if activate:
         previous = point_alias(client, alias, name)
-        log.info("alias %s: %s -> %s", alias, previous, name)
+        logger.info("alias {}: {} -> {}", alias, previous, name)
     return name
 
 
@@ -209,8 +208,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     parser.add_argument("--replace", action="store_true")  # rebuild a non-live one
     parser.add_argument("--activate", action="store_true")  # move the alias after
     args = parser.parse_args(argv)
-    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
-    logging.getLogger("httpx").setLevel(logging.WARNING)  # one line per request
+    setup_logging(json_lines=False)
 
     settings = QdrantSettings()
     try:

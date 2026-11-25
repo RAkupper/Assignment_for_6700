@@ -24,8 +24,7 @@ def main() -> int:
     """Return an exit Docker"""
     if check_health():
         return 0
-
-    print("Service health check failed", file=sys.stderr)
+    sys.stderr.write("Service health check failed\n")  # Docker keeps it in the state
     return 1
 
 
