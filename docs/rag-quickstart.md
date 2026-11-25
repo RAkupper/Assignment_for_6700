@@ -149,7 +149,7 @@ their clients' timeouts. If generation is disabled, retrieval is not checked;
 if it is enabled, the development echo model is rejected.
 
 ```bash
-uv sync --extra dev --frozen
+uv sync --frozen
 uv run pytest
 ```
 

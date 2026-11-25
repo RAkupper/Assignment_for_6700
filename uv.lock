@@ -51,7 +51,7 @@ dependencies = [
     { name = "uvicorn" },
 ]
 
-[package.optional-dependencies]
+[package.dev-dependencies]
 dev = [
     { name = "httpx" },
     { name = "mypy" },
@@ -65,18 +65,21 @@ dev = [
 requires-dist = [
     { name = "fastapi", specifier = ">=0.141.1" },
     { name = "fastembed", specifier = ">=0.9.1" },
-    { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.28.1" },
     { name = "httpx2", specifier = ">=2.13.0" },
-    { name = "mypy", marker = "extra == 'dev'", specifier = ">=2.3.1" },
-    { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=4.6.2" },
     { name = "pydantic-settings", specifier = ">=2.15.0" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=9.1.1" },
-    { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=7.1.0" },
     { name = "qdrant-client", specifier = ">=1.20.0" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.16.6" },
     { name = "uvicorn", specifier = ">=0.53.0" },
 ]
-provides-extras = ["dev"]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "httpx", specifier = ">=0.28.1" },
+    { name = "mypy", specifier = ">=2.3.1" },
+    { name = "pre-commit", specifier = ">=4.6.2" },
+    { name = "pytest", specifier = ">=9.1.1" },
+    { name = "pytest-cov", specifier = ">=7.1.0" },
+    { name = "ruff", specifier = ">=0.16.6" },
+]
 
 [[package]]
 name = "ast-serialize"

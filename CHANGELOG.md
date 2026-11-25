@@ -4,6 +4,17 @@ What changed for users in each release. The version lives in `pyproject.toml`;
 each release is a Git tag (`v0.2.0`) and an image in the GitHub Container Registry
 under the same tag. How to cut and deploy one: [docs/deployment.md](docs/deployment.md#release-and-deploy).
 
+## Unreleased
+
+### Changed
+- The page and its scripts are cached per release: `/assets/app.js?v=0.5.0` is kept
+  for a year, the page itself is revalidated on every visit, and answers stay
+  `no-store`. A new release loads new code without a hard refresh.
+- Caddy starts only once the app is healthy, so the first visits after a deploy get
+  the page instead of a 502.
+- Network failures on the page say "Could not reach the service" in every browser
+  (Chrome's "Failed to fetch", Safari's "Load failed" and "Fetch is aborted").
+
 ## 0.5.0
 
 ### Changed

@@ -10,9 +10,9 @@ exposes a typed `/health` endpoint; later assignments will put a model behind it
 HW2 added Qwen2.5-1.5B-Instruct in a llama.cpp container (`/generate`, now
 `/admin/generate` behind a key) and a
 scikit-learn digit classifier (`/predict`). `/predict` was removed in #44 once `/ask`
-replaced it; the HW2 blocking-call audit is still in [discussion.md](discussion.md)
-and the `blocking-before` and `blocking-after` tags. We deploy on Jetstream2 with
-`docker compose up -d`.
+replaced it; the HW2 blocking-call audit is still in
+[docs/hw2-discussion.md](docs/hw2-discussion.md) and the `blocking-before` and
+`blocking-after` tags. We deploy on Jetstream2 with `docker compose up -d`.
 
 Final project: the retrieval layer for RAG over U.S. immigration rules is in progress.
 Provision text from the ingestion catalog is embedded and stored in a Qdrant vector
@@ -63,12 +63,12 @@ uv --version
 ```bash
 git clone https://github.com/RAkupper/Assignment_for_6700.git
 cd Assignment_for_6700
-uv sync --extra dev --frozen
+uv sync --frozen
 ```
 
 `--frozen` installs the exact versions pinned in `uv.lock`, so every teammate and
-the CI runner get the same environment. `--extra dev` adds ruff, pytest, mypy and
-pre-commit.
+the CI runner get the same environment. The `dev` dependency group, which uv installs
+by default, adds ruff, pytest, mypy and pre-commit; the Docker image leaves it out.
 
 ### 3. Run the service
 
@@ -287,7 +287,8 @@ Jetstream2; this doesn't handle it.
 **What we keep.** Nothing per user: no accounts, no stored questions or answers.
 uvicorn's access log records the client address, path and status of each request,
 not its body. `/ask` and `/retrieve` send `Cache-Control: no-store` so browsers and
-proxies don't keep a copy.
+proxies don't keep a copy, and a shared cache can't hand one person's answer to
+someone else. With no per-user data there is nothing to export or delete on request.
 
 **Untrusted input.** Questions are limited to 1,000 characters. The prompt tells the
 model the question and evidence are data, not instructions, but that doesn't stop
@@ -477,7 +478,7 @@ return to your branch:
 ```bash
 audit_branch=$(git branch --show-current)
 git switch --detach blocking-before
-uv sync --extra dev --frozen
+uv sync --frozen
 uv run uvicorn myapp.app:app --host 127.0.0.1 --port 8000 --workers 1
 ```
 
@@ -493,7 +494,7 @@ Switch to the fixed version and start the server again:
 
 ```bash
 git switch --detach blocking-after
-uv sync --extra dev --frozen
+uv sync --frozen
 uv run uvicorn myapp.app:app --host 127.0.0.1 --port 8000 --workers 1
 ```
 
@@ -508,7 +509,7 @@ and resync its dependencies in that same terminal. Do this even if a benchmark f
 
 ```bash
 git switch "$audit_branch"
-uv sync --extra dev --frozen
+uv sync --frozen
 ```
 
 If you moved `.env` aside, restore it after returning to your branch (use the
@@ -761,7 +762,6 @@ Assignment_for_6700/
 ├── Dockerfile                 # app image: uv sync --frozen, non-root, HEALTHCHECK
 ├── compose.yml                # API/generation + model server + Qdrant + one-off jobs
 ├── Caddyfile                  # HTTPS reverse proxy in front of the app (proxy profile)
-├── discussion.md              # blocking-call audit: step table and measurements
 ├── pyproject.toml             # metadata, dependencies, tool config
 ├── uv.lock                    # pinned, shared environment
 ├── src/myapp/
@@ -785,6 +785,7 @@ Assignment_for_6700/
 │       └── search.py          # Searcher: hybrid search with date, visa and source filters
 ├── docs/model-serving.md      # model architecture decision and measurements
 ├── docs/deployment.md         # running the stack on Jetstream2, measurements
+├── docs/hw2-discussion.md    # HW2 blocking-call audit: step table and measurements
 ├── docs/docker.md             # building and checking the app image
 ├── measurements/              # before/after results of the blocking-call audit
 ├── outputs/docker/            # raw Docker build logs and timings
@@ -820,7 +821,7 @@ Assignment_for_6700/
 
 1. Check out the repository
 2. Install Python (version from `.python-version`)
-3. Install uv and run `uv sync --extra dev --frozen`
+3. Install uv and run `uv sync --frozen`
 4. `uv run ruff check` and `uv run ruff format --check`
 5. `uv run mypy src/`
 6. `uv run pytest`
@@ -881,7 +882,7 @@ A failure at any step fails the run. See results under the repository's
   projects inside an iCloud-synced Desktop or Documents folder. Check with
   `ls -lO .venv/lib/python3.13/site-packages/*.pth`. Quick fix:
   `chflags nohidden .venv/lib/python3.13/site-packages/*.pth`. Lasting fix: keep the
-  clone outside the synced folders, then `rm -rf .venv && uv sync --extra dev`.
+  clone outside the synced folders, then `rm -rf .venv && uv sync`.
 - **Port 8000 already in use**: add `--port 8001` to the run command.
 - **`/ready` or `/admin/generate` gives 503**: the model server isn't ready yet. Check
   `docker compose ps` (the first start has to download the model).

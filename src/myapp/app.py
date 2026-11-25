@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request, Response
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.security import APIKeyHeader
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field
@@ -52,9 +52,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         client.close()
 
 
+VERSION = version("assignment-1")  # the one place it is set: pyproject.toml
 app = FastAPI(
     title=settings.name,
-    version=version("assignment-1"),  # the one place it is set: pyproject.toml
+    version=VERSION,
     debug=settings.debug,
     lifespan=lifespan,
 )
@@ -72,13 +73,22 @@ async def no_store_private(
     response = await call_next(request)
     if request.url.path in PRIVATE_PATHS:
         response.headers["Cache-Control"] = "no-store"
+    elif request.url.path.startswith("/assets/") and response.status_code == 200:
+        # The page links assets as ?v=<version>, so a release changes the URL.
+        versioned = request.query_params.get("v") == VERSION
+        response.headers["Cache-Control"] = (
+            "public, max-age=31536000, immutable" if versioned else "no-cache"
+        )
     return response
 
 
 @app.get("/", include_in_schema=False)
-def index() -> FileResponse:
-    """Serve the same-origin prototype UI without a separate frontend server."""
-    return FileResponse(web_dir / "index.html")
+def index() -> HTMLResponse:
+    """Serve the page, its asset links pinned to this release so caches stay right."""
+    html = (web_dir / "index.html").read_text()
+    for asset in ("app.css", "app.js"):
+        html = html.replace(f"/assets/{asset}", f"/assets/{asset}?v={VERSION}")
+    return HTMLResponse(html, headers={"Cache-Control": "no-cache"})
 
 
 def get_model_client(request: Request) -> ModelClient:
