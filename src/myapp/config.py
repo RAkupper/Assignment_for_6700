@@ -65,6 +65,7 @@ class Settings(BaseSettings):
     name: str = Field(default="assignment-for-6700", min_length=1)
     environment: Literal["development", "production"] = "development"
     debug: bool = False
+    log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
     llm: ModelSettings = Field(default_factory=ModelSettings)
     admin_api_key: SecretStr | None = None  # unset turns /admin off (404)
     rate_limit_ask_per_minute: int = Field(default=10, ge=1)  # per client address

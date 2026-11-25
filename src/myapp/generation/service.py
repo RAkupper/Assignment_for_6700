@@ -1,10 +1,10 @@
 """Retrieve with the team's Searcher, build a prompt, then call the existing LLM."""
 
 import json
-import logging
 from datetime import UTC, datetime
 from threading import BoundedSemaphore, Lock
 
+from loguru import logger
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from qdrant_client import models
@@ -40,8 +40,6 @@ MODEL_UNAVAILABLE = (
     "The answer model is not available right now, so there is no written answer. "
     "These are the passages that matched your question. Try again in a minute."
 )
-
-log = logging.getLogger(__name__)
 
 
 class GenerationBusyError(ModelUnavailableError):
@@ -140,6 +138,7 @@ class GenerationService:
     def ask(self, request: QuestionRequest, model: ModelClient) -> Answer:
         hits = self.retrieve(request)
         if not hits:  # answered without the model, so it never waits for a slot
+            logger.info("retrieval came back empty")
             return Answer(
                 answer=NOT_COVERED, sources=[], status="insufficient_evidence"
             )
@@ -153,7 +152,7 @@ class GenerationService:
             finally:
                 self._slots.release()
         except ModelClientError as exc:  # retrieval worked, so the user still gets it
-            log.warning("answering with evidence only: %s", exc)
+            logger.warning("answering with evidence only: {}", exc)
             return Answer(
                 answer=MODEL_UNAVAILABLE, sources=hits, status="model_unavailable"
             )

@@ -1,14 +1,15 @@
 """Model client interface shared by the service and its tests."""
 
-import logging
 import random
 import time
 from collections.abc import Callable
 from typing import Any, Protocol, runtime_checkable
 
 import httpx2
+from loguru import logger
 
 from myapp.config import ModelSettings, Settings
+from myapp.log_config import record_model_call
 
 
 @runtime_checkable
@@ -27,8 +28,6 @@ class ModelClient(Protocol):
         """Release connections or other resources held by the client."""
         ...
 
-
-log = logging.getLogger(__name__)
 
 RETRYABLE = {429, 502, 503}  # rejected before generating: llama.cpp loading or full
 
@@ -114,7 +113,19 @@ class OpenAICompatibleClient:
             "temperature": self.settings.temperature,
             "stream": False,
         }
-        deadline = self._clock() + self.settings.timeout_s
+        started = self._clock()
+        tokens: int | None = None
+        try:
+            content, tokens = self._generate(payload, started)
+            return content
+        finally:  # failures are logged too, with the time they took
+            record_model_call(self.settings.model, tokens, self._clock() - started)
+
+    def _generate(
+        self, payload: dict[str, Any], started: float
+    ) -> tuple[str, int | None]:
+        """Run the retry loop for ``generate``; return the text and token count."""
+        deadline = started + self.settings.timeout_s
         for attempt in range(self.settings.max_retries + 1):
             remaining = deadline - self._clock()
             timeout = httpx2.Timeout(
@@ -150,7 +161,7 @@ class OpenAICompatibleClient:
             wait = self._backoff(attempt, response, deadline)
             if wait is None:
                 raise failure from cause
-            log.warning("%s; retry %d in %.1fs", failure, attempt + 1, wait)
+            logger.warning("{}; retry {} in {:.1f}s", failure, attempt + 1, wait)
             self._sleep(wait)
         raise AssertionError("unreachable")  # the last attempt returns or raises
 
@@ -170,14 +181,18 @@ class OpenAICompatibleClient:
             return None  # no time left for a useful try
         return wait
 
-    def _content(self, response: httpx2.Response) -> str:
+    def _content(self, response: httpx2.Response) -> tuple[str, int | None]:
+        """Pull the reply text, and the token count if reported, from a response."""
         try:
-            content = response.json()["choices"][0]["message"]["content"]
+            body = response.json()
+            content = body["choices"][0]["message"]["content"]
         except (ValueError, KeyError, IndexError, TypeError) as exc:
             raise ModelClientError("unexpected response from model server") from exc
         if not isinstance(content, str):
             raise ModelClientError("model server returned non-text content")
-        return content
+        usage = body.get("usage") if isinstance(body, dict) else None
+        tokens = usage.get("total_tokens") if isinstance(usage, dict) else None
+        return content, tokens if isinstance(tokens, int) else None
 
     def ping(self) -> None:
         """Check the configured model is present in the cheap ``/models`` listing.

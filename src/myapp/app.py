@@ -2,6 +2,7 @@
 
 import asyncio
 import secrets
+import time
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from importlib.metadata import version
@@ -12,11 +13,18 @@ from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request, Respons
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.security import APIKeyHeader
 from fastapi.staticfiles import StaticFiles
+from loguru import logger
 from pydantic import BaseModel, ConfigDict, Field
 
 from myapp.config import Settings
 from myapp.generation.schemas import Answer, QuestionRequest
 from myapp.generation.service import GenerationService, GenerationSettings
+from myapp.log_config import (
+    REQUEST_ID_HEADER,
+    configure_logging,
+    new_request_id,
+    start_request,
+)
 from myapp.model_client import (
     EchoModelClient,
     ModelClient,
@@ -30,6 +38,7 @@ from myapp.vectordb.search import Hit
 
 settings = Settings()
 generation_settings = GenerationSettings()
+configure_logging(settings.log_level)
 
 
 @asynccontextmanager
@@ -73,6 +82,52 @@ async def no_store_private(
     if request.url.path in PRIVATE_PATHS:
         response.headers["Cache-Control"] = "no-store"
     return response
+
+
+# Context fields the request log may copy; anything else stays out of the log.
+LOGGED_FIELDS = ("model", "tokens", "model_seconds")
+
+
+@app.middleware("http")
+async def request_log(
+    request: Request, call_next: Callable[[Request], Awaitable[Response]]
+) -> Response:
+    """Tag the request with an id, return it as a header, and log one summary line.
+
+    Registered last, so it runs first and wraps every other middleware. The line
+    has the endpoint, status, duration and, for answers, model and token count;
+    never the question, the answer or a key.
+    """
+    request_id = new_request_id(request.headers.get(REQUEST_ID_HEADER))
+    context = start_request(request_id)
+    started = time.perf_counter()
+    status = 500  # what the client gets if the app raises past every handler
+    try:
+        response = await call_next(request)
+        status = response.status_code
+        response.headers[REQUEST_ID_HEADER] = request_id
+        return response
+    finally:
+        fields = {k: context[k] for k in LOGGED_FIELDS if k in context}
+        logger.bind(
+            method=request.method,
+            path=request.url.path,
+            status=status,
+            duration_ms=round((time.perf_counter() - started) * 1000, 1),
+            **fields,
+        ).log(_level(request.url.path, status), "request")
+
+
+QUIET_PATHS = ("/health", "/assets/")  # Docker probes /health every 30 seconds
+
+
+def _level(path: str, status: int) -> str:
+    """Pick the request log level: failures stand out, probes and files stay quiet."""
+    if status >= 500:
+        return "WARNING"
+    if path.startswith(QUIET_PATHS):
+        return "DEBUG"
+    return "INFO"
 
 
 @app.get("/", include_in_schema=False)

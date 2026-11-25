@@ -4,6 +4,18 @@ What changed for users in each release. The version lives in `pyproject.toml`;
 each release is a Git tag (`v0.2.0`) and an image in the GitHub Container Registry
 under the same tag. How to cut and deploy one: [docs/deployment.md](docs/deployment.md#release-and-deploy).
 
+## Unreleased
+
+### Added
+- Logs are JSON lines through loguru, one object per line, including uvicorn's and
+  the libraries' messages. `APP_LOG_LEVEL` (default `INFO`) sets the lowest level.
+- Every response has an `X-Request-ID` header, reusing the caller's if it sends one,
+  and every log line of that request carries the same `request_id`.
+- One log line per request with method, path, status and duration, plus the model,
+  token count and model time for answers. Questions, answers and keys are never
+  logged. `/health` and static files log at DEBUG so Docker's probe doesn't fill the
+  log, and uvicorn's own access log is off.
+
 ## 0.4.0
 
 ### Changed
