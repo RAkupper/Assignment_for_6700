@@ -1,23 +1,59 @@
-# Assignment_for_6700
+# Student Visa Guide
 
-RAG prototype: `/ask` now connects the team's `vectordb` retrieval to the new
-`generation` module and the existing model client. See the
-[short startup guide](docs/rag-quickstart.md) for the unified `compose.yml` and catalog loading.
+**Team 02:** Bryce Grover, Jeremy SURNAME, Kye Toussaint, Tianwei SURNAME,
+Tianyu SURNAME (DSAN 6700, Fall 2026)
 
-An installable FastAPI service skeleton for our course ML inference API. This week it
-exposes a typed `/health` endpoint; later assignments will put a model behind it.
+Student Visa Guide answers questions about U.S. student visa rules (F, J and M) in
+plain English and shows the federal regulation behind every answer. International
+students and the staff who advise them can ask things like "How many hours can I
+work on campus?" and check the answer against the exact paragraph of 8 CFR 214 it
+came from, for today or for any date since 2020. It is a research prototype, not
+legal advice.
 
-HW2 added Qwen2.5-1.5B-Instruct in a llama.cpp container (`/generate`, now
-`/admin/generate` behind a key) and a
-scikit-learn digit classifier (`/predict`). `/predict` was removed in #44 once `/ask`
-replaced it; the HW2 blocking-call audit is still in [discussion.md](discussion.md)
-and the `blocking-before` and `blocking-after` tags. We deploy on Jetstream2 with
-`docker compose up -d`.
+Live app: <https://team02.cis240466.projects.jetstream-cloud.org>
+(API docs at [`/docs`](https://team02.cis240466.projects.jetstream-cloud.org/docs)).
 
-Final project: the retrieval layer for RAG over U.S. immigration rules is in progress.
-Provision text from the ingestion catalog is embedded and stored in a Qdrant vector
-database with dense (BGE) and sparse (BM25) vectors and filterable metadata. See
-[Vector database](#vector-database-qdrant).
+**How it works.** Every amendment of the regulations since 2020 is pulled from
+eCFR, split into provisions, and stored in a Qdrant index with dense (BGE) and
+sparse (BM25) vectors. For each question the app finds the matching provisions,
+reranks them with a cross-encoder, and has Qwen2.5-1.5B-Instruct (llama.cpp, on
+CPU) write a short answer that cites them. Questions the rules don't cover get
+"Insufficient evidence, ask your DSO" instead of a guess. Rebuilding all the data
+from eCFR takes about 23 minutes on one CPU; restoring it from a backup takes
+seconds ([details](#vector-database-qdrant)).
+
+## Demo
+
+1. **Ask a question.** Open the app, pick **F-1** as the visa type and ask
+   "How many hours can I work on campus?". The answer cites numbered sources, and
+   each evidence card links to that paragraph on ecfr.gov.
+2. **Go back in time.** Set **Rules as of** to a past date, such as 2021-06-01, to
+   see the rules in force on that day; the source links open eCFR at the same date.
+3. **See it decline.** Ask something the rules don't cover, such as "Can I bring
+   my dog?". The app says the evidence is insufficient and points to your DSO
+   instead of inventing an answer.
+4. **Use the API.** The same answer as JSON, with its sources:
+
+   ```bash
+   curl -s https://team02.cis240466.projects.jetstream-cloud.org/ask \
+     -H "Content-Type: application/json" \
+     -d '{"question": "How many hours can I work on campus?", "visa_type": "F-1"}'
+   ```
+
+   It returns `answer`, `status` (`answered`, `insufficient_evidence` or
+   `model_unavailable`) and `sources`, where citation `[1]` is `sources[0]`.
+
+**What happens to your questions.** The app has no accounts and stores no questions
+or answers. Traffic is HTTPS only, `/ask` responses are `Cache-Control: no-store`
+so no browser or shared cache keeps them, and the logs record the endpoint, timing
+and token count of each request, never the question or the answer.
+
+**Project history.** HW1 built the FastAPI skeleton with `/health`. HW2 added the
+llama.cpp model server (`/generate`, now `/admin/generate` behind a key) and a digit
+classifier that was removed in #44 once `/ask` replaced it; its blocking-call audit
+is in [discussion.md](discussion.md) and the `blocking-before` and
+`blocking-after` tags. The final project added ingestion, the vector index, `/ask`
+and the page, then HTTPS, backups, releases and the fixes from HW3 testing.
 
 ## Contents
 
@@ -583,6 +619,7 @@ sync.
 | `APP_NAME` | `assignment-for-6700` | Application title; must not be empty or whitespace-only. |
 | `APP_ENVIRONMENT` | `development` | Must be `development` or `production`. |
 | `APP_DEBUG` | `false` | Boolean debug flag; must be `false` in production. |
+| `APP_LOG_LEVEL` | `INFO` | Lowest level written: `DEBUG`, `INFO`, `WARNING` or `ERROR`. Logs are JSON lines on stderr; see [Logs](#logs). |
 | `APP_ADMIN_API_KEY` | unset | Key for `/admin` routes, sent as `X-Admin-Key`. Unset or blank turns them off (404). At least 32 characters; kept secret in logs and errors. |
 | `APP_RATE_LIMIT_ASK_PER_MINUTE` | `10` | `/ask` requests per client address per minute, then 429. At least 1. |
 | `APP_RATE_LIMIT_RETRIEVE_PER_MINUTE` | `30` | Same for `/retrieve`. |
@@ -809,6 +846,23 @@ Assignment_for_6700/
         ├── conftest.py        # bag-of-words fake encoder and fixture catalog builder
         ├── test_loader.py     # loader against a fixture catalog and in-memory Qdrant
         └── test_search.py     # ranking, date, visa, source and proposed-rule filters
+```
+
+### Logs
+
+The app writes one JSON object per line to stderr, so `docker compose logs app`
+shows them and `jq` can filter them. Each request ends with one `request` line, such as:
+
+```json
+{"time": "2026-11-24T21:11:05.503-05:00", "level": "INFO", "logger": "myapp.app", "message": "request", "method": "POST", "path": "/ask", "status": 200, "duration_ms": 13612.4, "request_id": "f2245f022f30496da711c143b8e15146", "model": "qwen2.5-1.5b-instruct", "tokens": 1873, "model_seconds": 9.8}
+```
+
+Every line logged during that request carries the same `request_id`, which is also
+returned in the `X-Request-ID` response header, so a user's error report can be
+matched to its log lines. Questions, answers and keys are never logged.
+
+```bash
+docker compose logs app --no-log-prefix | jq 'select(.path == "/ask")'
 ```
 
 ### Continuous integration
