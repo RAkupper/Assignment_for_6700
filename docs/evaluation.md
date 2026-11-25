@@ -47,15 +47,15 @@ had inline `[n]` citations. Neither is required for a pass.
 Full runs on TEAM02 through `scripts/deploy.sh`, with the same 25 questions and the
 same data (8 CFR 214, 3,882 provision versions).
 
-| Metric | v0.3.0 (Nov 24) | v0.4.0 (Nov 24) |
-| --- | --- | --- |
-| All cases passed | 19/25 | 22/25 |
-| Correct source retrieved | 16/20 | 18/20 |
-| Correct source ranked first | 13/20 | 16/20 |
-| Answers that passed | 16/21 | 18/21 |
-| Declined when it should | 3/4 | 4/4 |
-| Answers with inline citations | 0/19 | 0/20 |
-| Median seconds per question | 18.4 | 13.6 |
+| Metric | v0.3.0 (Nov 24) | v0.4.0 (Nov 24) | 0.5.0 prompt (Nov 25, local) |
+| --- | --- | --- | --- |
+| All cases passed | 19/25 | 22/25 | 23/25 |
+| Correct source retrieved | 16/20 | 18/20 | 18/20 |
+| Correct source ranked first | 13/20 | 16/20 | 16/20 |
+| Answers that passed | 16/21 | 18/21 | 19/21 |
+| Declined when it should | 3/4 | 4/4 | 4/4 |
+| Answers with inline citations | 0/19 | 0/20 | 19/20 |
+| Median seconds per question | 18.4 | 13.6 | 20.8 on a slower local CPU (v0.4.0 there: 18.2) |
 
 v0.4.0 added the cross-encoder reranker (#57, cause 3). Three cases flipped to pass:
 
@@ -66,16 +66,21 @@ v0.4.0 added the cross-encoder reranker (#57, cause 3). Three cases flipped to p
 - `too-vague`: "Program limitations?" now scores below the reranker's cutoff and is
   declined instead of answered with an unrelated rule.
 
+The 0.5.0 column was measured on a local copy of the stack (same model, data and
+questions; v0.4.0 scored the same 22/25 there) before deploying. The new prompt
+numbers the evidence, requires a source number on every sentence, states the
+asker's visa, and flags visa classes that do not exist, which fixed `f4-stem-opt`
+and took inline citations from 0 to 19 of 20.
+
 Still failing in v0.4.0, and why:
 
 | Case | Cause | Fix |
 | --- | --- | --- |
 | `opt-length` | The 12-month limit is inside the long (f)(10) paragraph, which ranks 48th on dense search and never reaches the candidates. | Split long provisions or search pieces and return the section (#57, cause 1). |
-| `f4-stem-opt` | The model answers yes for F-4, a class that does not exist. The visa type never reaches the prompt. | Put the visa type in the prompt and flag a different visa named in the question (#57, cause 4). |
+| `f4-stem-opt` | The model answers yes for F-4, a class that does not exist. The visa type never reaches the prompt. | Fixed in 0.5.0: the visa type is in the prompt and nonexistent classes are flagged. |
 | `degree-years` | The tester's wording ("how many years can I work on my Bachelor's") matches no provision well; every candidate scores about -6. | Declining is defensible. A clarifying question would help (deferred in #57). |
 
-No answer has inline `[n]` citations yet: the sources are listed, but the model does
-not label sentences (#57, cause 4).
+In v0.4.0 no answer had inline `[n]` citations; 0.5.0 fixed that (19 of 20).
 
 ## Add a question
 
