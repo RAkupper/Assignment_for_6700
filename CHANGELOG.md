@@ -4,6 +4,24 @@ What changed for users in each release. The version lives in `pyproject.toml`;
 each release is a Git tag (`v0.2.0`) and an image in the GitHub Container Registry
 under the same tag. How to cut and deploy one: [docs/deployment.md](docs/deployment.md#release-and-deploy).
 
+## 0.6.1
+
+### Fixed
+- Answers took twice as long after 0.6.0 (median 41.1 s against 23.0 s): Grafana,
+  idle, used 90% of a CPU that llama.cpp needs. Grafana and Prometheus are now capped
+  at a quarter of a CPU each, Grafana gets 512 MB, and its plugin downloads and its
+  own alerting are off. With them stopped, two slow test questions took 12 s instead
+  of 32 to 37 s ([postmortem](docs/postmortems/2026-11-25-monitoring-slowed-answers.md)).
+- `/metrics` was public after 0.6.0: the Caddyfile was mounted as a single file, so
+  Caddy kept the old one after `git checkout`. `caddy/` and `monitoring/` are now
+  mounted as folders, and `scripts/deploy.sh` reloads Caddy and Prometheus.
+- The SLO allows 45 s, not 30 s: 0.5.0 already took 23 s at the median and 34 s at
+  most on TEAM02, one question at a time.
+- 0.5.0's entry said answers got about 2 s slower; on TEAM02 it was 9 s.
+
+### Changed
+- `deploy.log` records the test set's median time next to its score.
+
 ## 0.6.0
 
 ### Added
@@ -43,7 +61,9 @@ under the same tag. How to cut and deploy one: [docs/deployment.md](docs/deploym
   answering yes (#47.10).
 - Measured on the test set with the same model and data: inline citations 0 to 19
   of 20 answers, all cases 22 to 23 of 25 (f4-stem-opt now passes), no case
-  regressed. Answers are a sentence or two longer, about 2 s more each.
+  regressed. Answers are a sentence or two longer, and on TEAM02 that costs more
+  than measured locally: the median answer went from 13.6 s to 23.0 s, the
+  slowest from 24.5 s to 34.3 s.
 
 ## 0.4.0
 

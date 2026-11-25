@@ -118,7 +118,7 @@ services:
       - "443:443"
       - "443:443/udp"
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./caddy:/etc/caddy:ro  # a folder, so a checkout's new Caddyfile is seen (a file mount keeps the old one)
       - caddy-data:/data  # the certificate; losing it means asking for a new one
       - caddy-config:/config
     depends_on:
@@ -136,10 +136,10 @@ services:
       - --storage.tsdb.path=/prometheus
       - --storage.tsdb.retention.time=30d
     volumes:
-      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - ./monitoring/rules.yml:/etc/prometheus/rules.yml:ro
+      - ./monitoring:/etc/prometheus:ro  # a folder for the same reason as Caddy's
       - prometheus-data:/prometheus
     mem_limit: 512m
+    cpus: 0.25  # llama.cpp needs both CPUs; anything else busy slows every answer
     restart: unless-stopped
 
   # The dashboard, on this machine only: ssh -L 3000:127.0.0.1:3000, then
@@ -154,6 +154,10 @@ services:
       GF_USERS_ALLOW_SIGN_UP: "false"
       GF_ANALYTICS_REPORTING_ENABLED: "false"
       GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      # Idle Grafana used 90% of a CPU at a 256 MB cap and doubled answer times (#60).
+      GF_PLUGINS_PREINSTALL_DISABLED: "true"  # no plugin downloads at start
+      GF_UNIFIED_ALERTING_ENABLED: "false"  # the alerts live in Prometheus
+      GF_LOG_LEVEL: warn
       GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /etc/grafana/dashboards/rag-service.json
     ports:
       - "127.0.0.1:3000:3000"  # never public; reach it through an SSH tunnel
@@ -163,7 +167,8 @@ services:
       - grafana-data:/var/lib/grafana
     depends_on:
       - prometheus
-    mem_limit: 256m
+    mem_limit: 512m
+    cpus: 0.25
     restart: unless-stopped
 
   # One-off ingestion and loading tasks, never started by "docker compose up":

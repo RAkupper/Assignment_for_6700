@@ -29,7 +29,7 @@ REQUEST_ID_HEADER = "X-Request-ID"
 VALID_REQUEST_ID = re.compile(r"[A-Za-z0-9._-]{1,64}")  # anything else is replaced
 
 # /ask answers that take longer than this count against the SLO (docs/observability.md).
-ASK_SLO_SECONDS = 30.0
+ASK_SLO_SECONDS = 45.0
 
 # Answers take 5 to 50 s on CPU; the top buckets cover the 60 s queue + 120 s model.
 SLOW_BUCKETS = (0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 15, 20, 30, 45, 60, 90, 120, 180)

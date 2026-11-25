@@ -47,15 +47,15 @@ had inline `[n]` citations. Neither is required for a pass.
 Full runs on TEAM02 through `scripts/deploy.sh`, with the same 25 questions and the
 same data (8 CFR 214, 3,882 provision versions).
 
-| Metric | v0.3.0 (Nov 24) | v0.4.0 (Nov 24) | 0.5.0 prompt (Nov 25, local) |
+| Metric | v0.3.0 (Nov 24) | v0.4.0 (Nov 24) | v0.5.0 (Nov 25) |
 | --- | --- | --- | --- |
 | All cases passed | 19/25 | 22/25 | 23/25 |
 | Correct source retrieved | 16/20 | 18/20 | 18/20 |
-| Correct source ranked first | 13/20 | 16/20 | 16/20 |
+| Correct source ranked first | 13/20 | 16/20 | 15/20 |
 | Answers that passed | 16/21 | 18/21 | 19/21 |
 | Declined when it should | 3/4 | 4/4 | 4/4 |
-| Answers with inline citations | 0/19 | 0/20 | 19/20 |
-| Median seconds per question | 18.4 | 13.6 | 20.8 on a slower local CPU (v0.4.0 there: 18.2) |
+| Answers with inline citations | 0/19 | 0/20 | 17/20 |
+| Median seconds per question | 18.4 | 13.6 | 23.0 |
 
 v0.4.0 added the cross-encoder reranker (#57, cause 3). Three cases flipped to pass:
 
@@ -66,11 +66,12 @@ v0.4.0 added the cross-encoder reranker (#57, cause 3). Three cases flipped to p
 - `too-vague`: "Program limitations?" now scores below the reranker's cutoff and is
   declined instead of answered with an unrelated rule.
 
-The 0.5.0 column was measured on a local copy of the stack (same model, data and
-questions; v0.4.0 scored the same 22/25 there) before deploying. The new prompt
+v0.5.0 changed the prompt. It
 numbers the evidence, requires a source number on every sentence, states the
 asker's visa, and flags visa classes that do not exist, which fixed `f4-stem-opt`
-and took inline citations from 0 to 19 of 20.
+and took inline citations from 0 to 17 of 20. The answers are longer, so the median
+went from 13.6 s to 23.0 s. A local run before the deploy had shown only about 2 s
+more, so speed is now measured on TEAM02, not locally.
 
 Still failing in v0.4.0, and why:
 
