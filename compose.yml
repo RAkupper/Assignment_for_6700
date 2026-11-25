@@ -120,7 +120,8 @@ services:
       - caddy-data:/data  # the certificate; losing it means asking for a new one
       - caddy-config:/config
     depends_on:
-      - app
+      app:
+        condition: service_healthy  # no 502s while the app loads its models
     restart: unless-stopped
 
   # One-off ingestion and loading tasks, never started by "docker compose up":

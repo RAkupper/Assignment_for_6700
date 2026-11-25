@@ -48,6 +48,25 @@ The slowest normal answer takes about 48 s (two questions at once on two CPUs), 
 60 s + 120 s leaves room for a full retry budget while staying under Caddy's 200 s.
 Measurements are in [deployment.md](deployment.md#time-limits-and-retries).
 
+## Running more than one copy (Kubernetes)
+
+Today one app container serves everyone. Two pieces of state live inside that
+process, so running two replicas behind one Kubernetes Service would break them:
+
+| State | Where it lives | What goes wrong with two replicas |
+| --- | --- | --- |
+| Rate limits (`SlidingWindowLimiter` in `app.py`) | a dict in each process | each replica counts on its own, so a client gets twice the limit, and a restart forgets every count |
+| Answer slots (`BoundedSemaphore` in `generation/service.py`) | a semaphore in each process | each replica lets `GENERATION_MAX_CONCURRENT` answers through, so the model server sees twice the load it has slots for, and requests queue or time out there instead of getting a quick 503 |
+
+The fix is to move both out of the process. Rate limits go in Redis (a counter per
+client and window with an expiry), or at the ingress, which most controllers can
+rate-limit per client address. Answer slots become the model server's job: run
+llama.cpp as its own Deployment with `--parallel` set to the slots it has, and let
+the app wait on it with the existing time limits, or put a small shared queue in
+front of it. Qdrant is already a separate service and the app keeps nothing else
+between requests, so nothing else changes. Caddy's job moves to the ingress
+controller and cert-manager.
+
 ## What changed since Deliverable 2
 
 | Added or changed | Why |
@@ -59,4 +78,8 @@ Measurements are in [deployment.md](deployment.md#time-limits-and-retries).
 | GHCR images, version tags, `scripts/deploy.sh` | Ship and roll back with one command, with a deploy log (#61, #62) |
 | Evaluation set run after every deploy | Notice answers getting worse even when every status is 200 (#58) |
 | Answer cache dropped from the design | Questions describe a user's visa status, so answers are not cached anywhere (`Cache-Control: no-store`) |
-| Backups off the instance, JSON logs, `/metrics` with Grafana | In progress (#55, #60) |
+| Backups as GitHub data releases, with a restore drill | Rebuild Qdrant without re-embedding after losing the instance (#55) |
+| Cross-encoder reranker over fused results (0.4.0) | Right provision first more often; 19/25 to 22/25 on the evaluation set (#73) |
+| Numbered evidence and per-sentence citations in the prompt (0.5.0) | Answers cite the source they use; 23/25 locally |
+| Caddy waits for a healthy app; static files cached per release | No 502s during startup; repeat visits load faster without serving old code |
+| JSON logs, `/metrics` with Grafana | In progress (#60) |

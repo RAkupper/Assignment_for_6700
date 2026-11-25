@@ -18,7 +18,7 @@ dependencies = [
     "uvicorn>=0.53.0",
 ]
 
-[project.optional-dependencies]
+[dependency-groups]
 dev = [
     "httpx>=0.28.1",
     "mypy>=2.3.1",

@@ -16,6 +16,15 @@ const PLAIN_ERRORS = { // Caddy's 502 and 504 have no JSON body
   504: "The answer took too long. Try again in a minute.",
 };
 
+function describeFailure(failure) {
+  if (failure.name === "TimeoutError") return "The answer took too long. Please try again.";
+  if (failure.name === "AbortError" || failure.name === "TypeError") {
+    // Network failures: Chrome says "Failed to fetch", Safari "Load failed" or "Fetch is aborted".
+    return "Could not reach the service. Check your connection, then try again.";
+  }
+  return failure.message || "Something went wrong. Please try again.";
+}
+
 async function readResponse(response) {
   const body = await response.json().catch(() => ({}));
   if (!response.ok) {
@@ -38,7 +47,7 @@ async function checkReadiness() {
   } catch (failure) {
     readiness.textContent = "○ Check service";
     readiness.dataset.ready = "false";
-    readiness.title = failure.message;
+    readiness.title = describeFailure(failure);
   } finally {
     readiness.disabled = false;
   }
@@ -132,7 +141,7 @@ form.addEventListener("submit", async event => {
     results.hidden = false;
     status.textContent = "";
   } catch (failure) {
-    error.textContent = failure.name === "TimeoutError" ? "The answer took too long. Please try again." : failure.message;
+    error.textContent = describeFailure(failure);
     error.hidden = false;
     status.textContent = "";
   } finally {
