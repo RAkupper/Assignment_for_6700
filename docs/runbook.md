@@ -37,6 +37,15 @@ first time, SSH asks you to trust the host; the fingerprint must be
 `SHA256:P3MOMLulOLoEUUm1IJ8DnZTVCjap2jvZdEr9cztdOHA`. If SSH ever says the host key
 *changed*, stop: you are talking to another machine.
 
+Right after an unshelve, SSH on a Mac can say `Could not resolve hostname`: it asked
+while the instance had no IP yet and cached the "no such name" answer. `dig +short
+team02.cis240466.projects.jetstream-cloud.org` shows the real IP. Clear the cache
+(it asks for your Mac's password), then connect again:
+
+```bash
+sudo dscacheutil -flushcache; sudo killall -HUP mDNSResponder
+```
+
 ## Check it's healthy
 
 From your laptop:
@@ -147,9 +156,30 @@ You should see the same output as a deploy, ending in `deployed v0.2.0: eval …
 `/health` reports the older version. To find the last version that worked:
 `grep ' ok ' deploy.log | tail -2`.
 
-We have one release so far, so the rollback hasn't been run on TEAM02 yet; the
-script's failure and rollback paths were tested with stand-ins for `git`, `docker` and
-`curl` (#62). After the next release, roll back once and paste the output here.
+What you should see, from rolling v0.2.1 back to v0.2.0 on Nov 24 (with
+`SKIP_EVAL=1`, since v0.2.1 had just passed the evaluation set):
+
+```text
+deploying v0.2.0 (last good: v0.2.1)
+image ghcr.io/rakupper/assignment_for_6700@sha256:77bd6507c0ff2fbd86f1549afa103790e08377a0b68c3c46c74bac1ee6d86a49
+schema is at 2: nothing to do
+ ✔ Container assignment_for_6700-qdrant-1  Healthy
+ ✔ Container assignment_for_6700-llm-1     Healthy
+ ✔ Container assignment_for_6700-app-1     Healthy
+ ✔ Container assignment_for_6700-caddy-1   Healthy
+deployed v0.2.0: eval skipped
+```
+
+It took about a minute, and `/health` reported `0.2.0` right after. The digest is the
+one v0.2.0 was first deployed with, so a rollback runs the exact image that worked
+before, not a rebuild. Rolling forward again is the same command with the newer
+version. `deploy.log` afterwards:
+
+```text
+2026-11-24T15:27:22Z v0.2.1 ghcr.io/rakupper/assignment_for_6700@sha256:9967adaa... ok eval 19/25
+2026-11-24T15:29:32Z v0.2.0 ghcr.io/rakupper/assignment_for_6700@sha256:77bd6507... ok eval skipped
+2026-11-24T15:47:57Z v0.2.1 ghcr.io/rakupper/assignment_for_6700@sha256:9967adaa... ok eval skipped
+```
 
 A rollback restarts the older image on the current data. Catalog migrations only move
 forward, so a release that changes the catalog's shape must keep the previous release
