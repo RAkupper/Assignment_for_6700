@@ -1,5 +1,6 @@
 {$APP_DOMAIN:localhost} {
 	encode gzip
+	respond /metrics 404 # Prometheus scrapes the app directly; the public never sees it
 	reverse_proxy app:8000 {
 		transport http {
 			dial_timeout 5s

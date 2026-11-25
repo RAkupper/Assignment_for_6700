@@ -9,9 +9,12 @@ import argparse
 import re
 from collections.abc import Sequence
 
+from loguru import logger
 from pydantic import Field, HttpUrl, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from qdrant_client import QdrantClient, models
+
+from myapp.observability import setup_logging
 
 DENSE = "dense"
 SPARSE = "sparse"
@@ -140,14 +143,15 @@ def main(argv: Sequence[str] | None = None) -> None:
     act = sub.add_parser("activate", help="point the alias at a collection")
     act.add_argument("name")
     args = parser.parse_args(argv)
+    setup_logging(json_lines=False)
 
     settings = QdrantSettings()
     client = get_client(settings)
     if args.command == "activate":
         previous = point_alias(client, settings.alias, args.name)
-        print(f"alias {settings.alias}: {previous} -> {args.name}")
+        logger.info(f"alias {settings.alias}: {previous} -> {args.name}")
     else:
-        print("\n".join(status(client, settings.alias)))
+        logger.info("\n".join(status(client, settings.alias)))
 
 
 if __name__ == "__main__":

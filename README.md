@@ -27,6 +27,8 @@ database with dense (BGE) and sparse (BM25) vectors and filterable metadata. See
 - [Deploy with Compose](#deploy-with-compose) (run everything on an instance)
 - [Runbook](docs/runbook.md) (exact commands for each routine task on TEAM02: deploy,
   rollback, reboot, shelve, fresh install, and what you should see)
+- [Observability](docs/observability.md) (JSON logs, request IDs, metrics, Grafana,
+  the `/ask` SLO)
 - [Security](#security) (HTTPS, open ports, admin key, rate limits, pinning)
 - [Docker](#docker) (build, run, and check the container)
 - [Vector database (Qdrant)](#vector-database-qdrant) (collection, loading, rollback)
@@ -285,8 +287,9 @@ memory and reset on restart. A flood from many machines has to be stopped in fro
 Jetstream2; this doesn't handle it.
 
 **What we keep.** Nothing per user: no accounts, no stored questions or answers.
-uvicorn's access log records the client address, path and status of each request,
-not its body. `/ask` and `/retrieve` send `Cache-Control: no-store` so browsers and
+The logs record each request's route, status and timing under a random request ID,
+never the question, the answer or the client address
+([observability.md](docs/observability.md)). `/ask` and `/retrieve` send `Cache-Control: no-store` so browsers and
 proxies don't keep a copy, and a shared cache can't hand one person's answer to
 someone else. With no per-user data there is nothing to export or delete on request.
 
@@ -672,6 +675,7 @@ LLM_PROVIDER=openai uv run python scripts/bench_model.py   # latency check
 | POST   | `/admin/generate` | `GenerateResponse` | Model completion for a prompt; needs `X-Admin-Key` |
 | POST   | `/retrieve` | `list[Hit]` | Team hybrid retrieval; generation must be enabled |
 | POST   | `/ask` | `Answer` | Retrieved evidence → LLM answer with sources |
+| GET    | `/metrics` | Prometheus text | Request, answer, model and retrieval metrics; not served through Caddy |
 | GET    | `/docs`   | HTML             | Auto-generated Swagger UI (FastAPI)      |
 
 `HealthResponse` fields:
@@ -762,6 +766,7 @@ Assignment_for_6700/
 ├── Dockerfile                 # app image: uv sync --frozen, non-root, HEALTHCHECK
 ├── compose.yml                # API/generation + model server + Qdrant + one-off jobs
 ├── Caddyfile                  # HTTPS reverse proxy in front of the app (proxy profile)
+├── monitoring/                # Prometheus config, SLO rules, Grafana dashboard (monitoring profile)
 ├── pyproject.toml             # metadata, dependencies, tool config
 ├── uv.lock                    # pinned, shared environment
 ├── src/myapp/
@@ -771,8 +776,8 @@ Assignment_for_6700/
 │   ├── healthcheck.py         # health check the container runs
 │   ├── model_client.py        # ModelClient protocol, echo and OpenAI-compatible clients
 │   ├── ratelimit.py           # per-client sliding-window limits for /ask and /retrieve
+│   ├── observability.py       # JSON logs, request IDs, Prometheus metrics
 │   ├── backup.py              # backups as GitHub data releases; verified restore
-│   ├── main.py                # CLI entry-point placeholder
 │   ├── ingest/                # source protocol and validated ingestion records
 │   ├── generation/
 │   │   ├── schemas.py        # QuestionRequest and Answer
@@ -785,7 +790,8 @@ Assignment_for_6700/
 │       └── search.py          # Searcher: hybrid search with date, visa and source filters
 ├── docs/model-serving.md      # model architecture decision and measurements
 ├── docs/deployment.md         # running the stack on Jetstream2, measurements
-├── docs/hw2-discussion.md    # HW2 blocking-call audit: step table and measurements
+├── docs/observability.md      # logs, metrics, Grafana and the /ask SLO
+├── docs/hw2-discussion.md     # HW2 blocking-call audit: step table and measurements
 ├── docs/docker.md             # building and checking the app image
 ├── measurements/              # before/after results of the blocking-call audit
 ├── outputs/docker/            # raw Docker build logs and timings

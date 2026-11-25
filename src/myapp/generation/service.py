@@ -1,11 +1,12 @@
 """Retrieve with the team's Searcher, build a prompt, then call the existing LLM."""
 
 import json
-import logging
 import re
+import time
 from datetime import UTC, datetime
 from threading import BoundedSemaphore, Lock
 
+from loguru import logger
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from qdrant_client import models
@@ -13,6 +14,7 @@ from qdrant_client.http.exceptions import ResponseHandlingException, UnexpectedR
 
 from myapp.generation.schemas import Answer, QuestionRequest
 from myapp.model_client import ModelClient, ModelClientError, ModelUnavailableError
+from myapp.observability import RETRIEVAL_SECONDS
 from myapp.vectordb.collection import DENSE, SPARSE, current_target
 from myapp.vectordb.search import Hit, Searcher
 
@@ -41,8 +43,6 @@ MODEL_UNAVAILABLE = (
     "The answer model is not available right now, so there is no written answer. "
     "These are the passages that matched your question. Try again in a minute."
 )
-
-log = logging.getLogger(__name__)
 
 
 class GenerationBusyError(ModelUnavailableError):
@@ -121,6 +121,15 @@ class GenerationService:
             ) from exc
 
     def retrieve(self, request: QuestionRequest) -> list[Hit]:
+        """Search the live collection; time it and log how many passages came back."""
+        started = time.perf_counter()
+        hits = self._search(request)
+        seconds = time.perf_counter() - started
+        RETRIEVAL_SECONDS.observe(seconds)
+        logger.bind(hits=len(hits), duration_ms=round(seconds * 1000)).info("retrieval")
+        return hits
+
+    def _search(self, request: QuestionRequest) -> list[Hit]:
         try:
             with self._search_lock:
                 return self.searcher.search(
@@ -154,7 +163,7 @@ class GenerationService:
             finally:
                 self._slots.release()
         except ModelClientError as exc:  # retrieval worked, so the user still gets it
-            log.warning("answering with evidence only: %s", exc)
+            logger.warning("answering with evidence only: {}", exc)
             return Answer(
                 answer=MODEL_UNAVAILABLE, sources=hits, status="model_unavailable"
             )

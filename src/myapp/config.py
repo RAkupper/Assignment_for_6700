@@ -69,6 +69,8 @@ class Settings(BaseSettings):
     admin_api_key: SecretStr | None = None  # unset turns /admin off (404)
     rate_limit_ask_per_minute: int = Field(default=10, ge=1)  # per client address
     rate_limit_retrieve_per_minute: int = Field(default=30, ge=1)
+    log_json: bool = True  # one JSON object per line; false for plain text locally
+    log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
 
     @field_validator("admin_api_key", mode="before")
     @classmethod

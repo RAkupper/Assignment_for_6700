@@ -3,6 +3,7 @@
 Only model inference is fake; there are no model downloads or external services.
 """
 
+import json
 import threading
 import warnings
 from collections.abc import Iterator
@@ -11,6 +12,7 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from prometheus_client import REGISTRY
 from qdrant_client import QdrantClient, models
 from qdrant_client.http.exceptions import ResponseHandlingException
 
@@ -29,6 +31,7 @@ from myapp.model_client import (
     ModelTimeoutError,
     ModelUnavailableError,
 )
+from myapp.observability import setup_logging
 from myapp.vectordb.loader import build, point_id
 from myapp.vectordb.search import Searcher, SearchSettings
 from tests.fakes import FakeModelClient
@@ -670,3 +673,41 @@ def test_prompt_states_the_asker_visa_and_numbers_every_source(
     prompt = model.prompts[0]
     assert "The asker's visa, chosen on the page: F-1." in prompt
     assert "End every sentence with the number of the source" in prompt
+
+
+def slo_events(good: str) -> float:
+    """How many /ask requests have been judged good or bad so far."""
+    return REGISTRY.get_sample_value("app_ask_slo_events_total", {"good": good}) or 0.0
+
+
+def test_ask_logs_ids_and_timings_but_never_the_question_or_answer(
+    api: tuple[TestClient, FakeModelClient], capsys: pytest.CaptureFixture[str]
+) -> None:
+    client, _ = api
+    setup_logging(json_lines=True)
+    capsys.readouterr()
+    response = client.post("/ask", json={"question": "Form I-983 secret-words"})
+    err = capsys.readouterr().err
+    lines = [json.loads(x) for x in err.splitlines() if x.startswith("{")]
+    rid = response.headers["X-Request-ID"]
+    by_message = {x["message"]: x for x in lines}
+    assert by_message["request"]["answer_status"] == "answered"
+    assert by_message["retrieval"]["hits"] >= 1
+    assert {x["request_id"] for x in lines} == {rid}  # the worker thread keeps it
+    assert "secret-words" not in err and "Fixture answer" not in err
+
+
+def test_ask_outcomes_are_counted_against_the_slo(
+    api: tuple[TestClient, FakeModelClient],
+) -> None:
+    client, model = api
+    good, bad = slo_events("true"), slo_events("false")
+    answered = REGISTRY.get_sample_value("app_answers_total", {"status": "answered"})
+    client.post("/ask", json={"question": "Form I-983"})
+    model.error = ModelTimeoutError("timed out")
+    client.post("/ask", json={"question": "Form I-983"})
+    client.post("/ask", json={"question": ""})  # 422: the caller's mistake
+    assert slo_events("true") == good + 1
+    assert slo_events("false") == bad + 1  # evidence only counts against it
+    after = REGISTRY.get_sample_value("app_answers_total", {"status": "answered"})
+    assert after == (answered or 0.0) + 1

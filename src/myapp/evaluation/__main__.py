@@ -19,7 +19,10 @@ from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
+from loguru import logger
+
 from myapp.evaluation.scoring import Case, Result, compare, load_cases, report, score
+from myapp.observability import setup_logging
 
 MAX_WAITS = 3  # retries after a 429 or 503 that says when to come back
 
@@ -65,6 +68,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     parser.add_argument("--only", action="append", help="run only this case id")
     parser.add_argument("--timeout", type=float, default=250.0)
     args = parser.parse_args(argv)
+    setup_logging(json_lines=False)
     base = args.base_url.rstrip("/")
 
     cases = load_cases()
@@ -83,15 +87,13 @@ def main(argv: Sequence[str] | None = None) -> None:
     for n, case in enumerate(cases, 1):
         result = run_case(base, case, args.timeout)
         mark = "pass" if result.passed else "FAIL"
-        print(f"[{n}/{len(cases)}] {mark} {case.id} ({result.seconds}s)", flush=True)
+        logger.info(f"[{n}/{len(cases)}] {mark} {case.id} ({result.seconds}s)")
         results.append(result)
 
-    print()
-    print(report(results, f"{base} · {started:%Y-%m-%d %H:%M} UTC"))
+    logger.info("\n" + report(results, f"{base} · {started:%Y-%m-%d %H:%M} UTC"))
     if args.compare:
         before = json.loads(args.compare.read_text())["results"]
-        print()
-        print(compare([Result.model_validate(r) for r in before], results))
+        logger.info("\n" + compare([Result.model_validate(r) for r in before], results))
     if args.out:
         args.out.write_text(
             json.dumps(

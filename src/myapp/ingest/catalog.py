@@ -14,7 +14,10 @@ from importlib.resources import files
 from importlib.resources.abc import Traversable
 from pathlib import Path
 
+from loguru import logger
+
 from myapp.config import IngestSettings
+from myapp.observability import setup_logging
 
 MIGRATIONS = files("myapp.ingest") / "migrations"
 NAME = re.compile(r"(\d{4})_[a-z0-9_]+\.sql")
@@ -126,14 +129,15 @@ def main(argv: Sequence[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("command", choices=["migrate", "status"])
     args = parser.parse_args(argv)
+    setup_logging(json_lines=False)
     settings = IngestSettings()
     path = catalog_path(settings)
     if args.command == "migrate":
-        print("\n".join(migrate(path, settings.data_dir / "backups")))
+        logger.info("\n".join(migrate(path, settings.data_dir / "backups")))
         return
     con = connect(path)
     try:
-        print(f"schema is at {schema_version(con)}, code needs {SCHEMA_REQUIRED}")
+        logger.info(f"schema is at {schema_version(con)}, code needs {SCHEMA_REQUIRED}")
     finally:
         con.close()
 

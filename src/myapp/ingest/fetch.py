@@ -5,17 +5,16 @@ Every response is kept, accepted or not. Logs hold counts, never content.
 
 import gzip
 import hashlib
-import logging
 import os
 import sqlite3
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
+from loguru import logger
+
 from myapp.ingest.schema import RawDocument
 from myapp.ingest.source import Source
-
-log = logging.getLogger(__name__)
 
 EXTENSIONS = {"xml": "xml", "json": "json", "html": "html"}
 
@@ -110,8 +109,8 @@ def fetch(con: sqlite3.Connection, data_dir: Path, source: Source) -> FetchSumma
                 accepted += 1
             else:
                 rejected += 1
-                log.warning(
-                    "rejected %s snapshot %s: %s",
+                logger.warning(
+                    "rejected {} snapshot {}: {}",
                     source.name,
                     raw.source_version,
                     reason,
@@ -128,8 +127,8 @@ def fetch(con: sqlite3.Connection, data_dir: Path, source: Source) -> FetchSumma
             (status, _now(), run_id),
         )
         con.commit()
-        log.info(
-            "fetch run %d %s: %d accepted, %d rejected",
+        logger.info(
+            "fetch run {} {}: {} accepted, {} rejected",
             run_id,
             status,
             accepted,

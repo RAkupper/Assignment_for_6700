@@ -8,6 +8,7 @@ import httpx2
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from prometheus_client import REGISTRY
 from pydantic import ValidationError
 
 from myapp.app import model_error_handler
@@ -363,3 +364,25 @@ def test_ping_is_not_retried() -> None:
     with pytest.raises(ModelUnavailableError):
         make_client(handler).ping()
     assert len(calls) == 1
+
+
+def test_generate_records_time_tokens_and_failures() -> None:
+    def sample(name: str, **labels: str) -> float:
+        return REGISTRY.get_sample_value(name, labels) or 0.0
+
+    tokens = sample("app_answer_tokens_sum")
+    calls = sample("app_model_call_duration_seconds_count")
+    body = {
+        "choices": [{"message": {"content": "ok"}}],
+        "usage": {"prompt_tokens": 900, "completion_tokens": 42},
+    }
+    handler, _ = answers(httpx2.Response(200, json=body))
+    assert make_client(handler).generate("hi") == "ok"
+    assert sample("app_answer_tokens_sum") == tokens + 42
+    assert sample("app_model_call_duration_seconds_count") == calls + 1
+
+    timeouts = sample("app_model_call_failures_total", kind="timeout")
+    handler, _ = answers(httpx2.ReadTimeout)
+    with pytest.raises(ModelTimeoutError):
+        make_client(handler).generate("hi")
+    assert sample("app_model_call_failures_total", kind="timeout") == timeouts + 1

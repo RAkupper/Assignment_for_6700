@@ -1,14 +1,15 @@
 """Model client interface shared by the service and its tests."""
 
-import logging
 import random
 import time
 from collections.abc import Callable
 from typing import Any, Protocol, runtime_checkable
 
 import httpx2
+from loguru import logger
 
 from myapp.config import ModelSettings, Settings
+from myapp.observability import ANSWER_TOKENS, MODEL_FAILURES, MODEL_SECONDS
 
 
 @runtime_checkable
@@ -27,8 +28,6 @@ class ModelClient(Protocol):
         """Release connections or other resources held by the client."""
         ...
 
-
-log = logging.getLogger(__name__)
 
 RETRYABLE = {429, 502, 503}  # rejected before generating: llama.cpp loading or full
 
@@ -95,6 +94,9 @@ class OpenAICompatibleClient:
     def generate(self, prompt: str) -> str:
         """Send one user message and return the model's reply text.
 
+        Records the call's time and token count in the metrics and logs one line
+        with the model, duration and tokens, never the prompt or the reply.
+
         This is the one place model calls are retried. A connection that was refused
         or never opened, or a 429/502/503, means nothing was generated, so it is
         retried up to ``LLM_MAX_RETRIES`` times with exponential backoff and full
@@ -107,6 +109,25 @@ class OpenAICompatibleClient:
             ModelUnavailableError: the server was unreachable or returned an error.
             ModelClientError: the response did not have the expected shape.
         """
+        started = self._clock()
+        try:
+            text, tokens = self._post(prompt)
+        except ModelClientError as exc:
+            MODEL_FAILURES.labels(_failure_kind(exc)).inc()
+            raise
+        seconds = self._clock() - started
+        MODEL_SECONDS.observe(seconds)
+        if tokens is not None:
+            ANSWER_TOKENS.observe(tokens)
+        logger.bind(
+            model=self.settings.model,
+            duration_ms=round(seconds * 1000),
+            completion_tokens=tokens,
+        ).info("model call")
+        return text
+
+    def _post(self, prompt: str) -> tuple[str, int | None]:
+        """Call the server with retries; return the reply and its completion tokens."""
         payload: dict[str, Any] = {
             "model": self.settings.model,
             "messages": [{"role": "user", "content": prompt}],
@@ -150,7 +171,7 @@ class OpenAICompatibleClient:
             wait = self._backoff(attempt, response, deadline)
             if wait is None:
                 raise failure from cause
-            log.warning("%s; retry %d in %.1fs", failure, attempt + 1, wait)
+            logger.warning("{}; retry {} in {:.1f}s", failure, attempt + 1, wait)
             self._sleep(wait)
         raise AssertionError("unreachable")  # the last attempt returns or raises
 
@@ -170,14 +191,17 @@ class OpenAICompatibleClient:
             return None  # no time left for a useful try
         return wait
 
-    def _content(self, response: httpx2.Response) -> str:
+    def _content(self, response: httpx2.Response) -> tuple[str, int | None]:
         try:
-            content = response.json()["choices"][0]["message"]["content"]
+            body = response.json()
+            content = body["choices"][0]["message"]["content"]
         except (ValueError, KeyError, IndexError, TypeError) as exc:
             raise ModelClientError("unexpected response from model server") from exc
         if not isinstance(content, str):
             raise ModelClientError("model server returned non-text content")
-        return content
+        usage = body.get("usage") if isinstance(body, dict) else None
+        tokens = usage.get("completion_tokens") if isinstance(usage, dict) else None
+        return content, tokens if isinstance(tokens, int) else None
 
     def ping(self) -> None:
         """Check the configured model is present in the cheap ``/models`` listing.
@@ -240,3 +264,12 @@ def build_model_client(settings: Settings) -> ModelClient:
     if settings.llm.provider == "openai":
         return OpenAICompatibleClient(settings.llm)
     return EchoModelClient()
+
+
+def _failure_kind(exc: ModelClientError) -> str:
+    """Label for the failure counter: timeout, unavailable or bad_response."""
+    if isinstance(exc, ModelTimeoutError):
+        return "timeout"
+    if isinstance(exc, ModelUnavailableError):
+        return "unavailable"
+    return "bad_response"

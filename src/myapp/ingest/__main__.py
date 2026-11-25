@@ -8,9 +8,10 @@ python -m myapp.ingest parse --rebuild     # after a parser fix: reapply all fro
 """
 
 import argparse
-import logging
 from collections.abc import Sequence
 from contextlib import closing
+
+from loguru import logger
 
 from myapp.config import IngestSettings
 from myapp.ingest.catalog import backup, catalog_path, connect, require_current
@@ -18,6 +19,7 @@ from myapp.ingest.ecfr import EcfrSource, split_part
 from myapp.ingest.fetch import already_fetched, fetch
 from myapp.ingest.http import PoliteClient
 from myapp.ingest.versions import parse, reset
+from myapp.observability import setup_logging
 
 
 def main(argv: Sequence[str] | None = None) -> None:
@@ -32,8 +34,7 @@ def main(argv: Sequence[str] | None = None) -> None:
         "--rebuild", action="store_true", help="reapply all from raw"
     )
     args = parser.parse_args(argv)
-    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
-    logging.getLogger("httpx2").setLevel(logging.WARNING)  # one line per request
+    setup_logging(json_lines=False)
 
     settings = IngestSettings()
     client = PoliteClient(settings)
@@ -52,8 +53,8 @@ def main(argv: Sequence[str] | None = None) -> None:
                 prefix = f"{title} CFR {number}."
                 if args.rebuild:
                     saved = backup(con, settings.data_dir / "backups", "rebuild")
-                    logging.info("backed up to %s", saved)
-                    logging.info("reset %d snapshots", reset(con, url_part, prefix))
+                    logger.info("backed up to {}", saved)
+                    logger.info("reset {} snapshots", reset(con, url_part, prefix))
                 summary = parse(
                     con,
                     settings.data_dir,
@@ -62,8 +63,8 @@ def main(argv: Sequence[str] | None = None) -> None:
                     prefix=prefix,
                     baseline_day=settings.ecfr_since.isoformat(),
                 )
-                logging.info(
-                    "parse run %d: %d snapshots, %d added, %d modified, %d removed",
+                logger.info(
+                    "parse run {}: {} snapshots, {} added, {} modified, {} removed",
                     summary.run_id,
                     summary.snapshots,
                     summary.added,

@@ -15,10 +15,12 @@ from collections.abc import Sequence
 from datetime import UTC, date, datetime
 from typing import Any, Protocol, cast
 
+from loguru import logger
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from qdrant_client import QdrantClient, models
 
+from myapp.observability import setup_logging
 from myapp.vectordb.collection import DENSE, SPARSE, QdrantSettings, get_client
 from myapp.vectordb.encoders import (
     CrossEncoderReranker,
@@ -272,6 +274,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     parser.add_argument("--include-proposed", action="store_true")
     parser.add_argument("--min-relevance", type=float)
     args = parser.parse_args(argv)
+    setup_logging(json_lines=False)
     hits = Searcher.from_settings().search(
         args.query,
         k=args.k,
@@ -282,13 +285,13 @@ def main(argv: Sequence[str] | None = None) -> None:
         min_relevance=args.min_relevance,
     )
     for h in hits:
-        print(
+        logger.info(
             f"rel {h.relevance:.3f}  score {h.score:.3f}  {h.provision_id}  "
             f"[{h.authority}, {h.status}]"
         )
-        print(f"       {h.text[:150]}")
+        logger.info(f"       {h.text[:150]}")
     if not hits:
-        print("nothing relevant enough: ask your DSO")
+        logger.info("nothing relevant enough: ask your DSO")
 
 
 if __name__ == "__main__":
