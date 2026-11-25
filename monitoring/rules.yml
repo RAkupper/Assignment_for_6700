@@ -1,5 +1,5 @@
 # The /ask SLO (docs/observability.md): 95% of /ask requests get a written or
-# not-covered answer, without a server error, within 30 s, over 7 days.
+# not-covered answer, without a server error, within 45 s, over 7 days.
 groups:
   - name: ask-slo
     rules:
@@ -15,7 +15,7 @@ groups:
         labels:
           severity: page
         annotations:
-          summary: More than 30% of /ask requests failed or took over 30 s in the last hour
+          summary: More than 30% of /ask requests failed or took over 45 s in the last hour
           runbook: docs/runbook.md
   - name: up
     rules:

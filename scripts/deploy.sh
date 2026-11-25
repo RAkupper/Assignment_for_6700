@@ -6,7 +6,8 @@
 # 2. Pull ghcr.io/rakupper/assignment_for_6700:<version> and record its digest.
 # 3. Pin that digest in .env as APP_IMAGE, so restarts and reboots keep it.
 # 4. Run pending catalog migrations (each backs the catalog up first).
-# 5. Start the stack on the image, wait for /ready, check /health reports <version>.
+# 5. Start the stack on the image, reload Caddy and Prometheus config, wait for
+#    /ready, check /health reports <version>.
 # 6. Run the evaluation set against it (SKIP_EVAL=1 skips, e.g. in an emergency).
 # 7. Append one line to deploy.log: time, version, digest, result, details.
 set -euo pipefail
@@ -44,6 +45,7 @@ main() {  # a function, so bash has read all of it before git checkout changes t
     fail "catalog migration failed" "$previous"
   docker compose up -d --no-build --wait --wait-timeout 300 ||
     fail "the stack did not become healthy" "$previous"
+  reload_config
 
   local ready=""
   for _ in $(seq 60); do  # the retrieval index and models load after the port opens
@@ -64,11 +66,26 @@ main() {  # a function, so bash has read all of it before git checkout changes t
     local score
     score=$(grep -o 'All cases passed | [0-9]*/[0-9]*' <<<"$report" | grep -o '[0-9]*/[0-9]*$') ||
       { echo "$report" | tail -5; score="did not run"; }
-    result="eval $score"
+    local median
+    median=$(grep -o 'Median seconds per question | [0-9.]*' <<<"$report" | grep -o '[0-9.]*$') ||
+      median="?"
+    result="eval $score, median ${median}s"  # a slowdown shows in deploy.log too
   fi
 
   record ok "$result"
   echo "deployed $version: $result"
+}
+
+reload_config() {  # running Caddy and Prometheus pick up the checked-out config files
+  local running
+  running=$(docker compose ps --services --status running)
+  if grep -qx caddy <<<"$running"; then
+    docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile ||
+      echo "warning: Caddy kept its old config"
+  fi
+  if grep -qx prometheus <<<"$running"; then
+    docker compose kill -s HUP prometheus >/dev/null || echo "warning: Prometheus kept its old config"
+  fi
 }
 
 last_good_version() {  # the version of the newest "ok" line in deploy.log

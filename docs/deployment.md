@@ -367,7 +367,7 @@ behind it, so the user sees the inner layer's clear answer instead of a hung pag
 | --- | --- | --- |
 | A question waiting for an answer slot | 60 s (`GENERATION_QUEUE_TIMEOUT_S`) | the passages, `status: "model_unavailable"` |
 | The model call, retries included | 120 s (`LLM_TIMEOUT_S`) | the passages, `status: "model_unavailable"` |
-| Caddy waiting for the app | 200 s (`response_header_timeout` in `Caddyfile`) | "The answer took too long" (504) |
+| Caddy waiting for the app | 200 s (`response_header_timeout` in `caddy/Caddyfile`) | "The answer took too long" (504) |
 | The page waiting for Caddy | 210 s (`ASK_LIMIT_MS` in `app.js`) | "The answer took too long" |
 | A Qdrant search or readiness check | 5 s (`QDRANT_TIMEOUT_S`; 60 s in the jobs container) | 503 with `Retry-After` |
 
@@ -444,7 +444,7 @@ scripts/deploy.sh v0.3.0   # deploy
 scripts/deploy.sh v0.2.0   # roll back to the release before
 ```
 
-It checks out the tag (so `compose.yml` and the `Caddyfile` match the image), pulls the
+It checks out the tag (so `compose.yml` and `caddy/Caddyfile` match the image), pulls the
 image, pins its digest in `.env` as `APP_IMAGE`, runs pending catalog migrations
 (each backs the catalog up first), starts the stack, waits for `/ready`, checks that
 `/health` reports the version, and runs the evaluation set (about 10 minutes;

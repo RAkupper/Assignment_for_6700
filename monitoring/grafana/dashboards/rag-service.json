@@ -73,7 +73,7 @@
         "graphMode": "none",
         "textMode": "value_and_name"
       },
-      "description": "Share of /ask requests with a written or not-covered answer, no server error, within 30 s."
+      "description": "Share of /ask requests with a written or not-covered answer, no server error, within 45 s."
     },
     {
       "id": 2,
@@ -405,7 +405,7 @@
           "mode": "multi"
         }
       },
-      "description": "The SLO counts answers over 30 s as bad."
+      "description": "The SLO counts answers over 45 s as bad."
     },
     {
       "id": 8,

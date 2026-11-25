@@ -38,7 +38,7 @@ clear message instead of a page that hangs.
 | Layer | Gives up after | Then the user sees | Set in |
 | --- | --- | --- | --- |
 | Page waiting for `/ask` | 210 s | "The answer took too long" | `web/app.js` |
-| Caddy waiting for the app | 200 s (connect 5 s) | 504, "The answer took too long" | `Caddyfile` |
+| Caddy waiting for the app | 200 s (connect 5 s) | 504, "The answer took too long" | `caddy/Caddyfile` |
 | Waiting for one of 2 model slots | 60 s | the passages, status `model_unavailable` | `GENERATION_QUEUE_TIMEOUT_S` |
 | Model call, retries included | 120 s (connect 5 s) | the passages, status `model_unavailable` | `LLM_TIMEOUT_S`, `LLM_CONNECT_TIMEOUT_S` |
 | Qdrant search or readiness check | 5 s (60 s in the jobs container) | 503 with `Retry-After` | `QDRANT_TIMEOUT_S` (#66) |

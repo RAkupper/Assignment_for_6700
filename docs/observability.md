@@ -68,7 +68,9 @@ Both run with the `monitoring` Compose profile. On TEAM02, `.env` has
 `COMPOSE_PROFILES=proxy,monitoring`, so `docker compose up -d` starts them with the
 rest. Prometheus scrapes `app`, `llm` and `qdrant` every 15 s and keeps 30 days.
 Neither is public: Prometheus has no published port, and Grafana listens on the
-instance's 127.0.0.1 only. To open the dashboard from a laptop:
+instance's 127.0.0.1 only. Each may use a quarter of a CPU at most: llama.cpp needs
+both of TEAM02's CPUs, and an uncapped, idle Grafana once doubled answer times
+([postmortem](postmortems/2026-11-25-monitoring-slowed-answers.md)). To open the dashboard from a laptop:
 
 ```bash
 ssh -L 3000:127.0.0.1:3000 exouser@team02.cis240466.projects.jetstream-cloud.org
@@ -91,18 +93,19 @@ request, not the Grafana editor. Viewing needs no login; the admin login is
 ## SLO for `/ask`
 
 **95% of `/ask` requests in any 7 days get a written or not-covered answer, without
-a server error, within 30 seconds.**
+a server error, within 45 seconds.**
 
 A request is **good** when the status is 2xx, the answer's status is `answered` or
-`insufficient_evidence`, and it finished within 30 s. It is **bad** when the status
+`insufficient_evidence`, and it finished within 45 s. It is **bad** when the status
 is 5xx, the model failed and only passages came back (`model_unavailable`), or it
-took longer than 30 s. 4xx responses (invalid input, the rate limit) are left out:
+took longer than 45 s. 4xx responses (invalid input, the rate limit) are left out:
 they say nothing about whether the service works.
 
-Why these numbers: on TEAM02's two CPUs the median answer takes about 15 s and the
-slowest normal one about 48 s, when two questions arrive at once
-([deployment.md](deployment.md#time-limits-and-retries)). 30 s is longer than a
-single answer needs and shorter than the point where a user gives up. 95% leaves
+Why these numbers: on TEAM02's two CPUs, one question at a time, the median answer
+takes 23 s and the slowest 34 s (v0.5.0 test set, [evaluation.md](evaluation.md#results)).
+Two at once take longer, up to about 48 s
+([deployment.md](deployment.md#time-limits-and-retries)). 45 s covers every single
+answer with room to spare and most pairs; past that, users give up. 95% leaves
 room for a burst of three or more users, which queues behind the two answer slots.
 That leaves a budget of 5% bad requests per 7 days.
 

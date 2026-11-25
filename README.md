@@ -765,7 +765,7 @@ Assignment_for_6700/
 ├── .python-version            # Python 3.13, read by uv and CI
 ├── Dockerfile                 # app image: uv sync --frozen, non-root, HEALTHCHECK
 ├── compose.yml                # API/generation + model server + Qdrant + one-off jobs
-├── Caddyfile                  # HTTPS reverse proxy in front of the app (proxy profile)
+├── caddy/Caddyfile            # HTTPS reverse proxy in front of the app (proxy profile)
 ├── monitoring/                # Prometheus config, SLO rules, Grafana dashboard (monitoring profile)
 ├── pyproject.toml             # metadata, dependencies, tool config
 ├── uv.lock                    # pinned, shared environment
